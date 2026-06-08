@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alan's Web3 Crypto Lottery</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151d30;
+            --border-color: #24324f;
+            --text-main: #f1f5f9;
+            --text-muted: #64748b;
+            --primary-blue: #38bdf8;
+            --ball-selected: #0ea5e9;
+            --success: #10b981;
+            --warning: #eab308;
+        }
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 40px 20px; display: flex; justify-content: center; min-height: 100vh; }
+        .dapp-container { width: 100%; max-width: 650px; }
+        
+        /* Header */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; }
+        h1 { font-size: 22px; font-weight: 700; margin: 0; background: linear-gradient(to right, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        /* Wallet Button */
+        .btn-connect { background-color: #627eea; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+        .btn-connect:hover { opacity: 0.9; }
+        .btn-connect.connected { background-color: var(--card-bg); border: 1px solid var(--success); color: var(--success); }
+
+        /* General Card */
+        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+        .card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 16px; }
+        
+        /* Ticket Display */
+        .ticket-preview { display: flex; gap: 10px; justify-content: center; margin: 15px 0; min-height: 45px; align-items: center; }
+        .ball-preview { width: 42px; height: 42px; background: linear-gradient(135deg, #1e293b, #0f172a); border: 2px dashed var(--border-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--primary-blue); font-size: 16px; transition: all 0.3s; }
+        .ball-preview.active { border-style: solid; border-color: var(--ball-selected); background: radial-gradient(circle at 30% 30%, #38bdf8, #0284c7); color: white; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); }
+
+        /* Number Selector Grid */
+        .number-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 20px; }
+        .ball-btn { background-color: #1e293b; border: 1px solid var(--border-color); color: var(--text-main); height: 45px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.15s; font-size: 15px; }
+        .ball-btn:hover { background-color: #2d3d5a; border-color: var(--primary-blue); }
+        .ball-btn.selected { background: radial-gradient(circle at 30% 30%, #38bdf8, #0ea5e9); border-color: #0ea5e9; color: white; box-shadow: 0 4px 6px rgba(14, 165, 233, 0.3); }
+
+        /* Action Row */
+        .action-row { display: flex; gap: 12px; margin-top: 20px; }
+        .btn-action { flex: 1; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 15px; cursor: pointer; border: none; transition: all 0.2s; }
+        .btn-submit { background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; }
+        .btn-submit:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-submit:disabled { background: #1e293b; color: var(--text-muted); border: 1px solid var(--border-color); cursor: not-allowed; transform: none; }
+        .btn-clear { background-color: transparent; color: var(--text-muted); border: 1px solid var(--border-color); }
+        .btn-clear:hover { border-color: #ef4444; color: #ef4444; }
+
+        /* Info Display */
+        .info-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+        .info-value { font-size: 13px; font-weight: 600; word-break: break-all; }
+
+        /* Logger console */
+        .logger { background-color: #05070c; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; color: #a855f7; max-height: 130px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+    <div class="dapp-container">
+        <div class="header">
+            <h1>Alan's Web3 Crypto Lottery</h1>
+            <button class="btn-connect" id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+        </div>
+
+        <div class="card" style="padding: 16px 24px;">
+            <div style="display: flex; justify-content: space-between;">
+                <div>
+                    <div class="info-label">玩家錢包 (Player)</div>
+                    <div class="info-value" id="accountAddress" style="color: var(--text-muted);">未連接 (Disconnected)</div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="info-label">當前網路 (Network)</div>
+                    <div class="info-value" id="networkName" style="color: var(--warning);">請先連線</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">大樂透選號投注藍 (Select 6 Numbers out of 42)</div>
+            
+            <div class="ticket-preview">
+                <div class="ball-preview" id="p0">-</div>
+                <div class="ball-preview" id="p1">-</div>
+                <div class="ball-preview" id="p2">-</div>
+                <div class="ball-preview" id="p3">-</div>
+                <div class="ball-preview" id="p4">-</div>
+                <div class="ball-preview" id="p5">-</div>
+            </div>
+
+            <div class="number-grid" id="numberGrid">
+                </div>
+
+            <div class="action-row">
+                <button class="btn-action btn-clear" onclick="clearSelection()">清除重選</button>
+                <button class="btn-action btn-submit" id="submitTicketBtn" onclick="submitLotteryTicket()" disabled>請先連接錢包</button>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 16px;">
+            <div class="card-title" style="margin-bottom: 8px;">DApp 鏈上交互控制台 (Smart Contract Logs)</div>
+            <div class="logger" id="logConsole">> 樂透系統就緒。請選擇 6 個幸運號碼，並點擊右上角連線。</div>
+        </div>
+    </div>
+
+    <script>
+        let selectedNumbers = [];
+        let isWalletConnected = false;
+
+        function log(message) {
+            const consoleEl = document.getElementById('logConsole');
+            consoleEl.innerHTML += `<br>> ${message}`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        // 渲染 1~42 的號碼按鈕盤
+        function initNumberGrid() {
+            const grid = document.getElementById('numberGrid');
+            grid.innerHTML = '';
+            for (let i = 1; i <= 42; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'ball-btn';
+                btn.innerText = i < 10 ? '0' + i : i;
+                btn.id = `ball-${i}`;
+                btn.onclick = () => selectNumber(i);
+                grid.appendChild(btn);
+            }
+        }
+
+        // 點擊號碼球觸發邏輯
+        function selectNumber(num) {
+            const index = selectedNumbers.indexOf(num);
+            const ballBtn = document.getElementById(`ball-${num}`);
+
+            if (index > -1) {
+                selectedNumbers.splice(index, 1);
+                ballBtn.classList.remove('selected');
+                log(`移除了號碼: [${num}]`);
+            } else {
+                if (selectedNumbers.length >= 6) {
+                    log("<span style='color: #ef4444;'>提示：大樂透每注只能選擇 6 個號碼！</span>");
+                    return;
+                }
+                selectedNumbers.push(num);
+                selectedNumbers.sort((a, b) => a - b);
+                ballBtn.classList.add('selected');
+                log(`選取了號碼: [${num}]`);
+            }
+            updatePreview();
+        }
+
+        // 更新上方 6 個球的預覽畫面
+        function updatePreview() {
+            for (let i = 0; i < 6; i++) {
+                const previewBall = document.getElementById(`p${i}`);
+                if (i < selectedNumbers.length) {
+                    const val = selectedNumbers[i];
+                    previewBall.innerText = val < 10 ? '0' + val : val;
+                    previewBall.classList.add('active');
+                } else {
+                    previewBall.innerText = '-';
+                    previewBall.classList.remove('active');
+                }
+            }
+            updateSubmitButtonState();
+        }
+
+        // 清除所有選號
+        function clearSelection() {
+            selectedNumbers = [];
+            initNumberGrid();
+            updatePreview();
+            log("已清空當前投注藍中的所有號碼。");
+        }
+
+        // 控制送出投注按鈕的禁用狀態
+        function updateSubmitButtonState() {
+            const btn = document.getElementById('submitTicketBtn');
+            if (!isWalletConnected) {
+                btn.disabled = true;
+                btn.innerText = "請先連接錢包";
+            } else if (selectedNumbers.length < 6) {
+                btn.disabled = true;
+                btn.innerText = `還需選擇 ${6 - selectedNumbers.length} 個號碼`;
+            } else {
+                btn.disabled = false;
+                btn.innerText = "送出大樂透彩券交易";
+            }
+        }
+
+        // Web3 錢包連線核心
+        async function connectWallet() {
+            log("正在呼叫瀏覽器 EVM 錢包環境...");
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    document.getElementById('accountAddress').innerText = accounts[0];
+                    document.getElementById('accountAddress').style.color = "var(--success)";
+                    
+                    const connectBtn = document.getElementById('connectBtn');
+                    connectBtn.innerText = "Connected";
+                    connectBtn.className = "btn-connect connected";
+                    
+                    isWalletConnected = true;
+                    log(`錢包連線成功！玩家地址: ${accounts[0]}`);
+                    
+                    const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                    const chainId = parseInt(chainIdHex, 16);
+                    const netName = chainId === 56 ? "BNB Smart Chain" : (chainId === 1 ? "Ethereum Mainnet" : `Chain ID: ${chainId}`);
+                    document.getElementById('networkName').innerText = netName;
+                    document.getElementById('networkName').style.color = "var(--primary-blue)";
+                    
+                    updateSubmitButtonState();
+
+                    window.ethereum.on('accountsChanged', () => { location.reload(); });
+                    window.ethereum.on('chainChanged', () => { location.reload(); });
+                } catch (err) {
+                    log(`使用者拒絕錢包連線授權。`);
+                }
+            } else {
+                alert("未偵測到 Web3 錢包，請先安裝 MetaMask 插件！");
+            }
+        }
+
+        // 模擬送出區塊鏈大樂透合約交易
+        function submitLotteryTicket() {
+            if (selectedNumbers.length !== 6) return;
+            
+            log("<br>=========================================");
+            log(`<span style='color: var(--success); font-weight: bold;'>[發送合約交易] 正在打包幸運號碼陣列...</span>`);
+            log(`🎯 投注號碼：[${selectedNumbers.join(', ')}]`);
+            log(`👉 **Solidity 合約對接點預留：**`);
+            log(`   未來將調用合約函數：<span style='color: var(--primary-blue);'>LotteryContract.buyTicket([${selectedNumbers.join(', ')}])</span>`);
+            log("=========================================<br>");
+            
+            alert(`投注成功！\n您選擇的號碼是：${selectedNumbers.join(', ')}\n準備好接收合約簽署通知。`);
+        }
+
+        initNumberGrid();
+    </script>
+</body>
+</html>
