@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alan Crypto Lottery - 大樂透投注與領獎系統</title>
-    <!-- 引入 Bootstrap 5 質感樣式 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- 引入 Ethers.js 負責與 MetaMask 和智能合約連線 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" type="text/javascript"></script>
     <style>
         body { background-color: #f8f9fa; font-family: "Microsoft JhengHei", sans-serif; }
@@ -24,14 +22,12 @@
 
 <div class="container lottery-container">
     
-    <!-- 頂部標題與錢包連線狀態 -->
     <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm">
         <h2 class="fw-bold mb-0 text-dark">🔮 Crypto Lottery</h2>
         <button id="connectWalletBtn" class="btn btn-success fw-bold" onclick="connectWallet()">連結 MetaMask 錢包</button>
     </div>
     <div id="walletAddressDisplay" class="alert alert-secondary text-center d-none" style="word-break: break-all;"></div>
 
-    <!-- 📊 領獎與投注功能頁籤（Tabs） -->
     <ul class="nav nav-tabs mb-4" id="lotteryTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active fs-5" id="buy-tab" data-bs-toggle="tab" data-bs-target="#buy-content" type="button" role="tab">🎟️ 購買彩券</button>
@@ -41,15 +37,10 @@
         </li>
     </ul>
 
-    <!-- 頁籤內容區 -->
     <div class="tab-content" id="lotteryTabsContent">
         
-        <!-- ==========================================
-             頁籤一：選號碼與購買頁面（含總獎池顯示）
-             ========================================== -->
         <div class="tab-pane fade show active" id="buy-content" role="tablist">
             
-            <!-- 💰 頂部即時核心獎池看板 -->
             <div class="row g-3 mb-4 match-height">
                 <div class="col-md-6">
                     <div class="card pool-card shadow border-0 p-4 text-center h-100">
@@ -67,40 +58,32 @@
                 </div>
             </div>
 
-            <!-- ⏳ 倒數計時與末日提醒 -->
             <div class="card mb-4 shadow-sm border-0 text-center p-3">
                 <h5 class="fw-bold text-danger">⏳ 距離本期開獎截止倒數</h5>
                 <h3 id="countdownDisplay" class="fw-bold text-dark">--天 --小時 --分 --秒</h3>
                 <small class="text-muted">💡 末日加速賽制：剩下 ≤24小時買票加10分鐘(上限24h)；剩下 ≤1小時買票加5分鐘(上限1h)！</small>
             </div>
 
-            <!-- 🔢 49選6 搖號投注選單 -->
             <div class="card p-4 shadow-sm border-0 mb-4">
                 <h4 class="fw-bold mb-3 text-secondary text-center">請選擇 6 個不重複號碼 (1 ~ 49)</h4>
                 <div class="text-center mb-4" id="numberGrid"></div>
                 
-                <!-- 顯示已選號碼 -->
                 <div class="alert alert-info text-center fs-5 mb-3">
                     已選擇號碼：<strong id="selectedNumbersDisplay" class="text-success">尚未選擇</strong>
                 </div>
 
-                <!-- 🎲 自動選號按鈕區 -->
                 <div class="mb-3">
                     <button class="btn btn-outline-success btn-md w-100 fw-bold" onclick="autoSelectNumbers()">
                         🎲 電腦自動選號
                     </button>
                 </div>
 
-                <!-- 確認投注按鈕 -->
                 <button class="btn btn-success btn-lg w-100 fw-bold shadow-sm" id="buyTicketBtn" onclick="buyTicket()" disabled>
                     確認投注 (需支付 0.005 BNB)
                 </button>
             </div>
         </div>
 
-        <!-- ==========================================
-             頁籤二：獨立領獎與歷史彩券頁籤
-             ========================================== -->
         <div class="tab-pane fade" id="claim-content" role="tablist">
             <div class="card p-4 shadow-sm border-0">
                 <h4 class="fw-bold mb-3 text-dark">🎁 歷史彩券對獎與獎金提領專區</h4>
@@ -108,7 +91,7 @@
                 
                 <div id="loadingTickets" class="text-center my-4 d-none">
                     <div class="spinner-border text-success" role="status"></div>
-                    <p class="mt-2 text-muted">正在鏈上讀取您的彩券資產紀錄中...</p>
+                    <p class="mt-2 text-muted">正在透過方案A高效封裝函數，1鍵秒讀您所有的鏈上彩券...</p>
                 </div>
 
                 <div id="myTicketsList">
@@ -122,14 +105,13 @@
     </div>
 </div>
 
-<!-- 引入 Bootstrap 5 JS 負責分頁切換動畫 -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
 // ==========================================
-// ⚙️ 網頁後台 Web3 接線設定
+// ⚙️ 網頁後台 Web3 接線設定 (已自動更換為你的全新精簡版合約地址)
 // ==========================================
-const LOTTERY_CONTRACT_ADDRESS = "0x049de417B0db3689512f4771aEFA2f03179e6267";
+const LOTTERY_CONTRACT_ADDRESS = "0x4805a7e288E02244A9c2fE996ea387cf5d3dD341";
 
 const CONTRACT_ABI = [
     "function currentRound() view returns (uint256)",
@@ -142,10 +124,9 @@ const CONTRACT_ABI = [
     "function roundLastTicketId(uint256) view returns (uint256)",
     "function roundWinningNumbers(uint256) view returns (uint8[6])",
     "function roundIsDrawn(uint256) view returns (bool)",
-    "function tickets(uint256) view returns (uint256 round, uint8[6] numbers, address owner, bool isClaimed, bool isDestroyed)",
     "function buyTickets(uint8[6][] chosenNumbers) payable",
     "function claimReward(uint256 ticketId) external",
-    "function getTimeLeft() view returns (uint256)"
+    "function getTicketsByOwner(address _owner) external view returns (uint256[] ticketIds, uint256[] rounds, uint8[6][] numbers, bool[] isClaimeds, bool[] isDestroyeds)"
 ];
 
 let provider, signer, lotteryContract;
@@ -169,7 +150,6 @@ window.addEventListener('load', () => {
     initStaticData();
 });
 
-// 初始化：改採當前錢包優先，降低跨網路造成的 NETWORK_ERROR 衝突
 async function initStaticData() {
     try {
         if (window.ethereum) {
@@ -177,33 +157,24 @@ async function initStaticData() {
             lotteryContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, provider);
             await updateLotteryPoolData();
             window.poolRefresher = setInterval(updateLotteryPoolData, 8000);
-        } else {
-            // 無錢包時退回公共節點
-            provider = new ethers.providers.JsonRpcProvider("https://data-seed-prebsc-1-s1.binance.org:8545/");
-            lotteryContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-            await updateLotteryPoolData();
-            window.poolRefresher = setInterval(updateLotteryPoolData, 8000);
         }
     } catch (e) { console.error("靜態初始化失敗:", e); }
 }
 
-// 監聽 MetaMask 鏈變更事件，防止 network changed 衝突
 if (window.ethereum) {
     window.ethereum.on('chainChanged', () => {
         window.location.reload();
     });
 }
 
-// 強制檢查並切換到 BSC Testnet 的核心內部函數
 async function _forceEnsureBSCTestnet(web3Provider) {
     const { chainId } = await web3Provider.getNetwork();
     if (chainId !== 97) {
         try {
             await window.ethereum.request({
                 method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0x61' }], // 97 的 16 進位是 0x61
+                params: [{ chainId: '0x61' }], 
             });
-            // 切換成功後重新建立 provider
             provider = new ethers.providers.Web3Provider(window.ethereum);
             lotteryContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, provider);
             return true;
@@ -225,7 +196,6 @@ async function connectWallet() {
         clearInterval(window.poolRefresher); 
         const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
         
-        // 1. 連線前強制檢查網路
         const isCorrectNet = await _forceEnsureBSCTestnet(web3Provider);
         if (!isCorrectNet) return;
 
@@ -346,11 +316,9 @@ async function updateLotteryPoolData() {
     } catch (e) { console.error("刷新鏈上即時獎池失敗：", e); }
 }
 
-// 買彩券送出交易 (加入雙重強制攔截)
 async function buyTicket() {
     if (!window.ethereum) { alert("請先安裝 MetaMask 錢包！"); return; }
     
-    // 🔥 攔截點一：在送出交易前，前端直接強制再次檢查網路，如果不是 97，立馬攔截並跳轉
     const currentProvider = new ethers.providers.Web3Provider(window.ethereum);
     const isCorrectNet = await _forceEnsureBSCTestnet(currentProvider);
     if (!isCorrectNet) return;
@@ -371,13 +339,14 @@ async function buyTicket() {
         const ticketPrice = ethers.utils.parseEther("0.005");
         const payload = [selectedNumbers]; 
 
-        // 重新確保合約物件使用的是最新的錢包簽名
         const activeContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, signer);
         const tx = await activeContract.buyTickets(payload, { value: ticketPrice });
         
         alert("彩券交易已送出，等待區塊鏈打包中...");
         await tx.wait();
-        alert("🎉 購買成功！彩券帳目已登記於鏈上，10% 開發手續費已自動分帳！");
+        
+        alert("🎉 購買成功！彩券帳目已登記於鏈上。");
+        
         await updateLotteryPoolData();
         if(userAddress) loadMyTickets();
         
@@ -401,68 +370,72 @@ async function loadMyTickets() {
     container.innerHTML = "";
 
     try {
-        const nextTicketId = await lotteryContract.nextTicketId();
-        const maxCheck = nextTicketId.toNumber();
-        let hasTickets = false;
+        // 使用方案A批量封裝函數進行1次性高效鏈上查詢
+        const data = await lotteryContract.getTicketsByOwner(userAddress);
+        const ticketIds = data.ticketIds;
+        const rounds = data.rounds;
+        const numbers = data.numbers;
+        const isClaimeds = data.isClaimeds;
+        const isDestroyeds = data.isDestroyeds;
 
-        for (let id = 1; id < maxCheck; id++) {
-            try {
-                const ticket = await lotteryContract.tickets(id);
-                
-                if (ticket.owner.toLowerCase() === userAddress.toLowerCase()) {
-                    hasTickets = true;
-                    
-                    const isDrawn = await lotteryContract.roundIsDrawn(ticket.round);
-                    const card = document.createElement('div');
-                    card.className = "card ticket-card p-3 shadow-sm bg-white mb-3";
-                    
-                    let statusBadge = "";
-                    let actionButton = "";
-
-                    if (ticket.isDestroyed || ticket.isClaimed) {
-                        statusBadge = `<span class="badge bg-secondary fs-6">✅ 已提領並銷毀此券</span>`;
-                    } else if (!isDrawn) {
-                        statusBadge = `<span class="badge bg-warning text-dark fs-6">⏳ 等待當期開獎中</span>`;
-                    } else {
-                        const winningNumbers = await lotteryContract.roundWinningNumbers(ticket.round);
-                        const matchCount = _calculateMatches(ticket.numbers, winningNumbers);
-                        const lastTicketIdOfRound = await lotteryContract.roundLastTicketId(ticket.round);
-                        const isSpecialWinner = (id === lastTicketIdOfRound.toNumber());
-
-                        if (matchCount >= 4 || isSpecialWinner) {
-                            let rewardName = `中 ${matchCount} 星獎！`;
-                            if (isSpecialWinner) rewardName += " + 🔥獨得特別獎！";
-                            
-                            statusBadge = `<span class="badge bg-success fs-6">🎉 恭喜符合中獎條件 (${rewardName})</span>`;
-                            actionButton = `
-                                <div class="mt-2">
-                                    <button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${id})">一鍵提領獎金 (領後銷毀)</button>
-                                </div>`;
-                        } else {
-                            statusBadge = `<span class="badge bg-danger fs-6">❌ 未中獎 (僅對中 ${matchCount} 星)</span>`;
-                        }
-                    }
-
-                    card.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="fw-bold mb-1 text-secondary">彩券 ID: #${id} (第 ${ticket.round.toString()} 期)</h6>
-                                <p class="mb-0 fs-5 fw-bold text-dark">選號：${ticket.numbers.join(', ')}</p>
-                            </div>
-                            <div>${statusBadge}</div>
-                        </div>
-                        ${actionButton}
-                    `;
-                    container.appendChild(card);
-                }
-            } catch (e) { console.log("略過已銷毀彩票 ID:", id); }
-        }
-
-        if (!hasTickets) {
+        if (ticketIds.length === 0) {
             container.innerHTML = `<div class="text-center py-5 text-muted">您目前在測試網尚無購買此樂透的彩券紀錄。</div>`;
+            return;
         }
+
+        for (let i = 0; i < ticketIds.length; i++) {
+            const id = ticketIds[i].toNumber();
+            const roundNum = rounds[i].toNumber();
+            const currentNumbers = numbers[i];
+            const isClaimed = isClaimeds[i];
+            const isDestroyed = isDestroyeds[i];
+
+            const isDrawn = await lotteryContract.roundIsDrawn(roundNum);
+            const card = document.createElement('div');
+            card.className = "card ticket-card p-3 shadow-sm bg-white mb-3";
+            
+            let statusBadge = "";
+            let actionButton = "";
+
+            if (isDestroyed || isClaimed) {
+                statusBadge = `<span class="badge bg-secondary fs-6">✅ 已提領並銷毀此券</span>`;
+            } else if (!isDrawn) {
+                statusBadge = `<span class="badge bg-warning text-dark fs-6">⏳ 等待當期開獎中</span>`;
+            } else {
+                const winningNumbers = await lotteryContract.roundWinningNumbers(roundNum);
+                const matchCount = _calculateMatches(currentNumbers, winningNumbers);
+                const lastTicketIdOfRound = await lotteryContract.roundLastTicketId(roundNum);
+                const isSpecialWinner = (id === lastTicketIdOfRound.toNumber());
+
+                if (matchCount >= 4 || isSpecialWinner) {
+                    let rewardName = `中 ${matchCount} 星獎！`;
+                    if (isSpecialWinner) rewardName += " + 🔥獨得特別獎！";
+                    
+                    statusBadge = `<span class="badge bg-success fs-6">🎉 恭喜符合中獎條件 (${rewardName})</span>`;
+                    actionButton = `
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${id})">一鍵提領獎金 (領後銷毀)</button>
+                        </div>`;
+                } else {
+                    statusBadge = `<span class="badge bg-danger fs-6">❌ 未中獎 (僅對中 ${matchCount} 星)</span>`;
+                }
+            }
+
+            card.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold mb-1 text-secondary">彩券 ID: #${id} (第 ${roundNum} 期)</h6>
+                        <p class="mb-0 fs-5 fw-bold text-dark">選號：${currentNumbers.join(', ')}</p>
+                    </div>
+                    <div>${statusBadge}</div>
+                </div>
+                ${actionButton}
+            `;
+            container.appendChild(card);
+        }
+
     } catch (err) {
-        console.error(err);
+        console.error("批量查詢出錯：", err);
         container.innerHTML = `<div class="text-center py-5 text-danger">讀取鏈上彩券資料失敗。</div>`;
     } finally {
         loader.classList.add('d-none');
