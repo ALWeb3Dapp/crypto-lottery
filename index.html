@@ -3,355 +3,408 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TWLotteryToken 去中心化大樂透</title>
-    <!-- 引入 Ethers.js V6 標準庫 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-    
+    <title>Alan Crypto Lottery - 大樂透投注與領獎系統</title>
+    <!-- 引入 Bootstrap 5 質感樣式 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入 Ethers.js 負責與 MetaMask 和智能合約連線 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" type="text/javascript"></script>
     <style>
-        /* 🎯 嚴格鎖定：黑底藍色科技風格 */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #121214; /* 絕對深黑底 */
-            color: #ffffff;
-            margin: 0;
-            padding: 40px 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .container {
-            max-width: 500px;
-            width: 100%;
-            background: #1a1a1e; /* 深灰色面板 */
-            border-radius: 16px;
-            padding: 30px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            box-sizing: border-box;
-            border: 1px solid #2d2d35;
-        }
-        h1 {
-            text-align: center;
-            color: #ffffff;
-            font-size: 28px;
-            margin-top: 0;
-            margin-bottom: 24px;
-            letter-spacing: 1px;
-        }
-        .info-panel {
-            background: #26262b;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 24px;
-            border: 1px solid #3a3a42;
-        }
-        .info-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            font-size: 15px;
-        }
-        .info-item:last-child {
-            margin-bottom: 0;
-        }
-        .label { color: #9090a1; }
-        .value { font-weight: 600; color: #0071e3; } /* 資訊值使用藍色 */
-        
-        /* 1~42顆球選號網格 */
-        .number-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-        .ball {
-            aspect-ratio: 1;
-            background: #2d2d35;
-            border: 2px solid #44444f;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            user-select: none;
-            color: #ffffff;
-        }
-        .ball:hover {
-            background: #3e3e4a;
-            border-color: #0071e3;
-        }
-        /* ⚡ 點亮時：科技藍發光效果 */
-        .ball.selected {
-            background: #0071e3;
-            color: #ffffff;
-            border-color: #ffffff;
-            box-shadow: 0 0 14px rgba(0, 113, 227, 0.7);
-        }
-        
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        button {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        button:hover {
-            opacity: 0.9;
-        }
-        .btn-connect { background-color: #ffffff; color: #121214; }
-        .btn-random { background-color: #44444f; color: white; }
-        .btn-submit { background-color: #0071e3; color: white; }
-        
-        .status-msg {
-            text-align: center;
-            color: #9090a1;
-            font-size: 14px;
-            margin-top: 20px;
-        }
+        body { background-color: #f8f9fa; font-family: "Microsoft JhengHei", sans-serif; }
+        .lottery-container { max-width: 800px; margin: 30px auto; }
+        .pool-card { background: linear-gradient(135deg, #6610f2, #6f42c1); color: white; border-radius: 15px; }
+        .fomo-card { background: linear-gradient(135deg, #6610f2, #6f42c1); color: white; border-radius: 15px; }
+        .number-btn { width: 50px; height: 50px; margin: 5px; border-radius: 50%; font-weight: bold; }
+        .ticket-card { border-left: 5px solid #0d6efd; margin-bottom: 15px; }
+        .nav-tabs .nav-link { color: #495057; font-weight: bold; }
+        .nav-tabs .nav-link.active { color: #6f42c1 !important; border-bottom: 3px solid #6f42c1; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>TLT Crypto Lottery</h1>
+<div class="container lottery-container">
     
-    <!-- 狀態資訊區 -->
-    <div class="info-panel">
-        <div class="info-item">
-            <span class="label">目前期數:</span>
-            <span class="value" id="roundId">未連結</span>
-        </div>
-        <div class="info-item">
-            <span class="label">當期總獎池:</span>
-            <span class="value" id="jackpotAmount">0.00 BNB</span>
-        </div>
-        <div class="info-item">
-            <span class="label">本期截止時間:</span>
-            <span class="value" id="endTime">未連結</span>
-        </div>
+    <!-- 頂部標題與錢包連線狀態 -->
+    <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm">
+        <h2 class="fw-bold mb-0 text-dark">🔮 Crypto Lottery</h2>
+        <button id="connectWalletBtn" class="btn btn-primary fw-bold" onclick="connectWallet()">連結 MetaMask 錢包</button>
     </div>
+    <div id="walletAddressDisplay" class="alert alert-secondary text-center d-none" style="word-break: break-all;"></div>
 
-    <!-- 1 ~ 42 選號網格 -->
-    <div class="number-grid" id="numberGrid"></div>
+    <!-- 📊 領獎與投注功能功能頁籤（Tabs） -->
+    <ul class="nav nav-tabs mb-4" id="lotteryTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fs-5" id="buy-tab" data-bs-toggle="tab" data-bs-target="#buy-content" type="button" role="tab">🎟️ 購買彩券</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fs-5" id="claim-tab" data-bs-toggle="tab" data-bs-target="#claim-content" type="button" role="tab" onclick="loadMyTickets()">💰 我的彩券與領獎</button>
+        </li>
+    </ul>
 
-    <!-- 互動按鈕群 -->
-    <div class="btn-group">
-        <button class="btn-connect" onclick="connectWallet()">🌐 連結 MetaMask 錢包</button>
-        <button class="btn-random" onclick="handleAutoSelect()">🎲 自動選號 (快選)</button>
-        <button class="btn-submit" onclick="handleSubmitTicket()">🎟️ 確認投注 (0.005 BNB)</button>
+    <!-- 頁籤內容內容區 -->
+    <div class="tab-content" id="lotteryTabsContent">
+        
+        <!-- ==========================================
+             頁籤一：選號碼與購買頁面（含總獎池顯示）
+             ========================================== -->
+        <div class="tab-pane fade show active" id="buy-content" role="tablist">
+            
+            <!-- 💰 頂部即時獎池看板 -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <div class="card pool-card shadow border-0 p-4 text-center">
+                        <h5 class="text-white-50">本期累積總獎池</h5>
+                        <h2 class="fw-bold" id="totalPoolDisplay">0.0000 BNB</h2>
+                        <small id="roundDisplay" class="text-white-50">當前期數：第 -- 期</small>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card fomo-card shadow border-0 p-4 text-center">
+                        <h5 class="text-white-50">🔥 FOMO 特別獎池 (最後一注獨得)</h5>
+                        <h2 class="fw-bold" id="fomoPoolDisplay">0.0000 BNB</h2>
+                        <small id="lastBuyerDisplay" class="text-white-50">最後購買者：無</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ⏰ 倒數計時與末日提醒 -->
+            <div class="card mb-4 shadow-sm border-0 text-center p-3">
+                <h5 class="fw-bold text-danger">⏳ 距離本期開獎截止倒數</h5>
+                <h3 id="countdownDisplay" class="fw-bold text-dark">--天 --小時 --分 --秒</h3>
+                <small class="text-muted">💡 進入最後 1 小時後：延長賽前 24 小時內每次購買加 10 分鐘；第 24~25 小時內每次購買加 5 分鐘！</small>
+            </div>
+
+            <!-- 🔢 42選6 搖號投注選單 -->
+            <div class="card p-4 shadow-sm border-0 mb-4">
+                <h4 class="fw-bold mb-3 text-secondary text-center">請選擇 6 個不重複號碼 (1 ~ 42)</h4>
+                <div class="text-center mb-4" id="numberGrid">
+                    <!-- JavaScript 會在這裡自動生成 1~42 個按鈕 -->
+                </div>
+                
+                <!-- 顯示已選號碼 -->
+                <div class="alert alert-info text-center fs-5 mb-3">
+                    已選擇號碼：<strong id="selectedNumbersDisplay" class="text-primary">尚未選擇</strong>
+                </div>
+
+                <!-- 🎲 補上的自動選號按鈕區 -->
+                <div class="mb-3">
+                    <button class="btn btn-outline-primary btn-md w-100 fw-bold" onclick="autoSelectNumbers()">
+                        🎲 電腦自動選號
+                    </button>
+                </div>
+
+                <!-- 確認投注按鈕 -->
+                <button class="btn btn-success btn-lg w-100 fw-bold shadow-sm" id="buyTicketBtn" onclick="buyTicket()" disabled>
+                    確認投注 (需支付 0.005 BNB)
+                </button>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             頁籤二：獨立領獎與歷史彩券頁籤
+             ========================================== -->
+        <div class="tab-pane fade" id="claim-content" role="tablist">
+            <div class="card p-4 shadow-sm border-0">
+                <h4 class="fw-bold mb-3 text-dark">🎁 歷史彩券對獎與獎金提領專區</h4>
+                <p class="text-muted">請注意：當期開獎後，請先點擊「對獎登記」驗證星數，若中獎即可一鍵點擊「提領獎金」將 BNB 轉回錢包！</p>
+                
+                <div id="loadingTickets" class="text-center my-4 d-none">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">正在鏈上讀取您的彩券 NFT 紀錄中...</p>
+                </div>
+
+                <div id="myTicketsList">
+                    <!-- JavaScript 會在這裡動態渲染玩家買過的彩券列表與提領按鈕 -->
+                    <div class="text-center py-5 text-muted">
+                        請先連結錢包，或您目前在測試網尚無購買這套樂透的紀錄。
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
-    
-    <div class="status-msg" id="statusMsg">提示：請先連結錢包，選滿 6 個號碼即可投注。</div>
 </div>
 
+<!-- 引入 Bootstrap 5 JS 負責分頁切換動畫 -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-    // 合約對接配置
-    const LOTTERY_CONTRACT_ADDRESS = "0xf8e81D47203A594245E36C48e151709F0C19fBe8"; 
-    const LOTTERY_ABI = [
-        {
-            "inputs": [
-                { "internalType": "address", "name": "_tltToken", "type": "address" },
-                { "internalType": "address", "name": "_pancakeLP", "type": "address" }
-            ],
-            "stateMutability": "nonpayable",
-            "type": "constructor"
-        },
-        {
-            "inputs": [ { "internalType": "uint8[6]", "name": "_numbers", "type": "uint8[6]" } ],
-            "name": "buyTicket",
-            "outputs": [],
-            "stateMutability": "payable",
-            "type": "function"
-        },
-        {
-            "inputs": [],
-            "name": "drawLottery",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-        },
-        {
-            "inputs": [],
-            "name": "currentRound",
-            "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ],
-            "stateMutability": "view",
-            "type": "function"
-        },
-        {
-            "inputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ],
-            "name": "rounds",
-            "outputs": [
-                { "internalType": "uint256", "name": "startTime", "type": "uint256" },
-                { "internalType": "uint256", "name": "endTime", "type": "uint256" },
-                { "internalType": "uint256", "name": "initialEndTime", "type": "uint256" },
-                { "internalType": "bool", "name": "isDrawn", "type": "bool" },
-                { "internalType": "uint256", "name": "totalPool", "type": "uint256" },
-                { "internalType": "uint256", "name": "firstPrizePool", "type": "uint256" },
-                { "internalType": "uint256", "name": "secondPrizePool", "type": "uint256" },
-                { "internalType": "uint256", "name": "thirdPrizePool", "type": "uint256" },
-                { "internalType": "uint256", "name": "specialPrizePool", "type": "uint256" },
-                { "internalType": "address", "name": "lastTicketOwner", "type": "address" },
-                { "internalType": "uint256", "name": "totalTicketsBought", "type": "uint256" }
-            ],
-            "stateMutability": "view",
-            "type": "function"
+// ==========================================
+// ⚙️ 網頁後台 Web3 接線設定
+// ==========================================
+const LOTTERY_CONTRACT_ADDRESS = "請貼上你熱騰騰的測試網大樂透合約地址";
+
+const CONTRACT_ABI = [
+    "function currentRound() view returns (uint256)",
+    "function rounds(uint256) view returns (uint256 startTime, uint256 endTime, uint256 initialEndTime, uint8[6] winningNumbers, bool isDrawn, uint256 totalPool, uint256 firstPrizePool, uint256 secondPrizePool, uint256 thirdPrizePool, uint256 specialPrizePool, address lastTicketOwner, uint256 totalTicketsBought)",
+    "function tickets(uint256) view returns (uint256 round, uint8[6] numbers, bool claimed)",
+    "function nextTokenId() view returns (uint256)",
+    "function ownerOf(uint256) view returns (address)",
+    "function buyTicket(uint8[6] _numbers) payable",
+    "function checkTicketResult(uint256 _tokenId) view returns (uint8 matchCount)",
+    "function registerWinners(uint256 _tokenId) external",
+    "function claimReward(uint256 _tokenId) external"
+];
+
+let provider, signer, lotteryContract;
+let userAddress = "";
+let selectedNumbers = [];
+
+// 畫面初始化：生成 1~42 個號碼球
+window.addEventListener('load', () => {
+    const grid = document.getElementById('numberGrid');
+    for (let i = 1; i <= 42; i++) {
+        const btn = document.createElement('button');
+        btn.innerText = i;
+        btn.id = `num-btn-${i}`; // 幫每個按鈕加 ID 方便自動選號時操作
+        btn.className = "btn btn-outline-secondary number-btn";
+        btn.onclick = () => selectNumber(i, btn);
+        grid.appendChild(btn);
+    }
+    initStaticData();
+});
+
+async function initStaticData() {
+    try {
+        if (window.ethereum) {
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            lotteryContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+            await updateLotteryPoolData();
+            setInterval(updateLotteryPoolData, 15000);
         }
-    ];
+    } catch (e) { console.log("靜態讀取鏈上資料失敗，等待連結錢包。"); }
+}
 
-    let provider;
-    let signer;
-    let lotteryContract;
-    let userSelectedNumbers = [];
+// 連結錢包
+async function connectWallet() {
+    if (!window.ethereum) { alert("請先安裝 MetaMask 錢包外掛！"); return; }
+    try {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        userAddress = await signer.getAddress();
+        lotteryContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-    // 初始化 1~42 的號碼球
-    window.addEventListener('DOMContentLoaded', () => {
-        const grid = document.getElementById('numberGrid');
-        if (grid) {
-            for (let i = 1; i <= 42; i++) {
-                const ball = document.createElement('div');
-                ball.className = 'ball';
-                ball.innerText = i;
-                ball.id = `ball-${i}`;
-                ball.addEventListener('click', () => toggleNumber(i));
-                grid.appendChild(ball);
-            }
+        document.getElementById('connectWalletBtn').innerText = "已連結";
+        document.getElementById('connectWalletBtn').className = "btn btn-success fw-bold";
+        
+        const display = document.getElementById('walletAddressDisplay');
+        display.innerText = `目前帳號：${userAddress}`;
+        display.classList.remove('d-none');
+
+        await updateLotteryPoolData();
+        loadMyTickets();
+    } catch (error) {
+        console.error(error);
+        alert("連線錢包時發生錯誤！");
+    }
+}
+
+// 號碼球點擊邏輯
+function selectNumber(num, btn) {
+    if (selectedNumbers.includes(num)) {
+        selectedNumbers = selectedNumbers.filter(n => n !== num);
+        btn.classList.remove('btn-primary', 'text-white');
+        btn.classList.add('btn-outline-secondary');
+    } else {
+        if (selectedNumbers.length >= 6) { alert("最多隻能選擇 6 個號碼！"); return; }
+        selectedNumbers.push(num);
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-primary', 'text-white');
+    }
+    selectedNumbers.sort((a, b) => a - b);
+    updateSelectedDisplay();
+}
+
+// 🎰 補上的自動選號核心邏輯
+function autoSelectNumbers() {
+    // 1. 先把原本選的號碼跟外觀全部清除重置
+    selectedNumbers = [];
+    const btns = document.querySelectorAll('.number-btn');
+    btns.forEach(b => {
+        b.classList.remove('btn-primary', 'text-white');
+        b.classList.add('btn-outline-secondary');
+    });
+
+    // 2. 隨機生成 6 個 1~42 不重複的數字
+    while (selectedNumbers.length < 6) {
+        let randNum = Math.floor(Math.random() * 42) + 1;
+        if (!selectedNumbers.includes(randNum)) {
+            selectedNumbers.push(randNum);
+        }
+    }
+
+    // 3. 排序並點亮對應的 HTML 號碼球球外觀
+    selectedNumbers.sort((a, b) => a - b);
+    selectedNumbers.forEach(num => {
+        const btn = document.getElementById(`num-btn-${num}`);
+        if (btn) {
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-primary', 'text-white');
         }
     });
 
-    // 手動選號邏輯
-    function toggleNumber(num) {
-        const ball = document.getElementById(`ball-${num}`);
-        if (!ball) return;
+    // 4. 更新下方的顯示文字與啟用按鈕
+    updateSelectedDisplay();
+}
+
+// 抽出來獨立更新文字顯示的輔助函數
+function updateSelectedDisplay() {
+    document.getElementById('selectedNumbersDisplay').innerText = selectedNumbers.length > 0 ? selectedNumbers.join(', ') : "尚未選擇";
+    document.getElementById('buyTicketBtn').disabled = selectedNumbers.length !== 6;
+}
+
+// 讀取並即時顯示目前總獎池、FOMO池
+async function updateLotteryPoolData() {
+    if (!lotteryContract) return;
+    try {
+        const currentRound = await lotteryContract.currentRound();
+        const roundData = await lotteryContract.rounds(currentRound);
+
+        const totalPoolEth = ethers.utils.formatEther(roundData.totalPool);
+        const fomoPoolEth = ethers.utils.formatEther(roundData.specialPrizePool);
         
-        if (userSelectedNumbers.includes(num)) {
-            userSelectedNumbers = userSelectedNumbers.filter(n => n !== num);
-            ball.classList.remove('selected');
-        } else {
-            if (userSelectedNumbers.length >= 6) {
-                alert("每張彩券最多隻能選擇 6 個號碼！");
-                return;
+        document.getElementById('roundDisplay').innerText = `當前進行中：第 ${currentRound.toString()} 期`;
+        document.getElementById('totalPoolDisplay').innerText = `${parseFloat(totalPoolEth).toFixed(4)} BNB`;
+        document.getElementById('fomoPoolDisplay').innerText = `${parseFloat(fomoPoolEth).toFixed(4)} BNB`;
+        document.getElementById('lastBuyerDisplay').innerText = `最後購買者：${roundData.lastTicketOwner.substring(0,6)}...${roundData.lastTicketOwner.substring(38)}`;
+
+        const endTimeMs = roundData.endTime.toNumber() * 1000;
+        clearInterval(window.countdownTimer);
+        window.countdownTimer = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = endTimeMs - now;
+            if (distance < 0) {
+                document.getElementById('countdownDisplay').innerText = "本期已截止，等待機器人開獎中！";
+                clearInterval(window.countdownTimer);
+            } else {
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                document.getElementById('countdownDisplay').innerText = `${days}天 ${hours}小時 ${minutes}分 ${seconds}秒`;
             }
-            userSelectedNumbers.push(num);
-            ball.classList.add('selected');
-        }
-        userSelectedNumbers.sort((a, b) => a - b);
-        updateStatusMsg();
+        }, 1000);
+
+    } catch (e) { console.error("刷新獎池失敗：", e); }
+}
+
+// 買彩券送出交易
+async function buyTicket() {
+    if (!signer) { alert("請先點擊上方按鈕連結 MetaMask 錢包！"); return; }
+    if (selectedNumbers.length !== 6) return;
+    try {
+        const ticketPrice = ethers.utils.parseEther("0.005");
+        const tx = await lotteryContract.buyTicket(selectedNumbers, { value: ticketPrice });
+        alert("彩券交易已送出，等待區塊鏈打包中...");
+        await tx.wait();
+        alert("🎉 購買成功！彩券 NFT 已發送至您的錢包！");
+        await updateLotteryPoolData();
+        
+        // 購買完成後自動清空外觀
+        selectedNumbers = [];
+        document.getElementById('selectedNumbersDisplay').innerText = "尚未選擇";
+        document.getElementById('buyTicketBtn').disabled = true;
+        const btns = document.querySelectorAll('.number-btn');
+        btns.forEach(b => b.className = "btn btn-outline-secondary number-btn");
+    } catch (err) {
+        console.error(err);
+        alert("交易失敗，請確認餘額是否足夠。");
     }
+}
 
-    // 🎲 點擊「自動選號」
-    function handleAutoSelect() {
-        document.querySelectorAll('.ball').forEach(b => b.classList.remove('selected'));
-        userSelectedNumbers = [];
+// 領獎分頁核心：動態尋找並渲染玩家的彩券 NFT
+async function loadMyTickets() {
+    if (!userAddress) return;
+    const container = document.getElementById('myTicketsList');
+    const loader = document.getElementById('loadingTickets');
+    
+    loader.classList.remove('d-none');
+    container.innerHTML = "";
 
-        while (userSelectedNumbers.length < 6) {
-            const num = Math.floor(Math.random() * 42) + 1;
-            if (!userSelectedNumbers.includes(num)) {
-                userSelectedNumbers.push(num);
-            }
-        }
-        userSelectedNumbers.sort((a, b) => a - b);
+    try {
+        const nextTokenId = await lotteryContract.nextTokenId();
+        const maxCheck = nextTokenId.toNumber();
+        let hasTickets = false;
 
-        userSelectedNumbers.forEach(num => {
-            const ball = document.getElementById(`ball-${num}`);
-            if (ball) ball.classList.add('selected');
-        });
-
-        updateStatusMsg();
-    }
-
-    function updateStatusMsg() {
-        const msg = document.getElementById('statusMsg');
-        if (!msg) return;
-        if(userSelectedNumbers.length === 0) {
-            msg.innerText = "提示：請先連結錢包，選滿 6 個號碼即可投注。";
-        } else {
-            msg.innerText = `目前已選擇號碼：[ ${userSelectedNumbers.join(", ")} ] (${userSelectedNumbers.length}/6 碼)`;
-        }
-    }
-
-    // 連結錢包
-    async function connectWallet() {
-        if (window.ethereum) {
+        for (let id = 0; id < maxCheck; id++) {
             try {
-                await window.ethereum.request({ method: 'eth_requestAccounts' });
-                provider = new ethers.BrowserProvider(window.ethereum);
-                signer = await provider.getSigner();
-                lotteryContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, LOTTERY_ABI, signer);
-                
-                const userAddress = await signer.getAddress();
-                alert(`錢包連結成功！\n地址: ${userAddress.substring(0,6)}...${userAddress.substring(38)}`);
-                
-                updateRoundInfo();
-            } catch (error) {
-                console.error("連結錢包失敗:", error);
-            }
-        } else {
-            alert("未偵測到 MetaMask 錢包，請先安裝擴充功能！");
-        }
-    }
+                const tokenOwner = await lotteryContract.ownerOf(id);
+                if (tokenOwner.toLowerCase() === userAddress.toLowerCase()) {
+                    hasTickets = true;
+                    const ticket = await lotteryContract.tickets(id);
+                    const roundData = await lotteryContract.rounds(ticket.round);
+                    
+                    const card = document.createElement('div');
+                    card.className = "card ticket-card p-3 shadow-sm bg-white mb-3";
+                    
+                    let statusBadge = "";
+                    let actionButton = "";
 
-    // 讀取合約數據
-    async function updateRoundInfo() {
-        if (!lotteryContract) return;
-        try {
-            const currentRound = await lotteryContract.currentRound();
-            const roundData = await lotteryContract.rounds(currentRound);
-            
-            const totalPoolBNB = ethers.formatEther(roundData.totalPool);
-            const endTimeStr = new Date(Number(roundData.endTime) * 1000).toLocaleString();
-            
-            document.getElementById("roundId").innerText = `第 ${currentRound} 期`;
-            document.getElementById("jackpotAmount").innerText = `${totalPoolBNB} BNB`;
-            document.getElementById("endTime").innerText = endTimeStr;
-        } catch (error) {
-            console.error("更新數據失敗:", error);
-        }
-    }
+                    if (!roundData.isDrawn) {
+                        statusBadge = `<span class="badge bg-warning text-dark fs-6">⏳ 等待開獎中</span>`;
+                    } else if (ticket.claimed) {
+                        statusBadge = `<span class="badge bg-secondary fs-6">✅ 已完成提領</span>`;
+                    } else {
+                        const matchCount = await lotteryContract.checkTicketResult(id);
+                        
+                        if (matchCount >= 4) {
+                            statusBadge = `<span class="badge bg-success fs-6">🎉 恭喜中 ${matchCount} 星獎！</span>`;
+                            actionButton = `
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-outline-primary me-2" onclick="registerWinner(${id})">Step 1: 對獎登記</button>
+                                    <button class="btn btn-sm btn-success" onclick="claimReward(${id})">Step 2: 提領獎金</button>
+                                </div>`;
+                        } else {
+                            statusBadge = `<span class="badge bg-danger fs-6">❌ 未中獎 (對中 ${matchCount} 星)</span>`;
+                        }
+                    }
 
-    // 投注
-    async function handleSubmitTicket() {
-        if (!lotteryContract) {
-            alert("請先點擊上方按鈕連結錢包！");
-            return;
-        }
-        if (userSelectedNumbers.length !== 6) {
-            alert("號碼數量不正確！請手動選滿 6 碼或點擊『自動選號』。");
-            return;
+                    card.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold mb-1 text-secondary">彩券 NFT ID: #${id} (第 ${ticket.round} 期)</h6>
+                                <p class="mb-0 fs-5 fw-bold text-dark">選號：${ticket.numbers.join(', ')}</p>
+                            </div>
+                            <div>${statusBadge}</div>
+                        </div>
+                        ${actionButton}
+                    `;
+                    container.appendChild(card);
+                }
+            } catch (e) { /* 忽視已銷毀 NFT 錯誤 */ }
         }
 
-        try {
-            document.getElementById('statusMsg').innerText = "請在 MetaMask 錢包確認交易...";
-            
-            const tx = await lotteryContract.buyTicket(userSelectedNumbers, {
-                value: ethers.parseEther("0.005")
-            });
-            
-            document.getElementById('statusMsg').innerText = "交易已發送，等待鏈上打包中...";
-            await tx.wait();
-            
-            alert(`🎉 恭喜！投注交易成功！\n號碼：[ ${userSelectedNumbers.join(", ")} ]\n已為您 Mint 彩券 NFT。`);
-            
-            document.querySelectorAll('.ball').forEach(b => b.classList.remove('selected'));
-            userSelectedNumbers = [];
-            updateStatusMsg();
-            updateRoundInfo(); 
-        } catch (error) {
-            document.getElementById('statusMsg').innerText = "交易失敗或已取消。";
-            console.error("投注失敗:", error);
-            if (error.reason) alert(`交易失敗: ${error.reason}`);
+        if (!hasTickets) {
+            container.innerHTML = `<div class="text-center py-5 text-muted">您目前在測試網尚無購買此樂透的彩券紀錄。</div>`;
         }
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = `<div class="text-center py-5 text-danger">讀取鏈上彩券資料失敗。</div>`;
+    } finally {
+        loader.classList.add('d-none');
     }
+}
+
+async function registerWinner(tokenId) {
+    try {
+        const tx = await lotteryContract.registerWinners(tokenId);
+        alert("正在提交對獎資格至區塊鏈...");
+        await tx.wait();
+        alert("對獎資格登記成功！現在您可以一鍵提領獎金了。");
+        loadMyTickets();
+    } catch (e) { alert("登記失敗，可能該張彩券不滿足 4 星以上中獎門檻。"); }
+}
+
+async function claimReward(tokenId) {
+    try {
+        const tx = await lotteryContract.claimReward(tokenId);
+        alert("提領獎金交易已送出，正在將合約內的 BNB 轉回您的錢包...");
+        await tx.wait();
+        alert("💰 獎金提領成功！請至 MetaMask 錢包查看暴增的 BNB 餘額！");
+        loadMyTickets();
+        updateLotteryPoolData();
+    } catch (e) { alert("提領失敗，請確保您已完成 Step 1 的對獎登記。"); }
+}
 </script>
-
 </body>
 </html>
