@@ -111,19 +111,20 @@
 // ==========================================
 // ⚙️ 網頁後台 Web3 接線設定 (已自動更換為你的全新精簡版合約地址)
 // ==========================================
-const LOTTERY_CONTRACT_ADDRESS = "0x4805a7e288E02244A9c2fE996ea387cf5d3dD341";
+const LOTTERY_CONTRACT_ADDRESS = "0x6cF3ec785BDB68AAf70c27Df9a37d3Ee3070bd55";
 
 const CONTRACT_ABI = [
     "function currentRound() view returns (uint256)",
     "function lotteryEndTime() view returns (uint256)",
     "function nextTicketId() view returns (uint256)",
-    "function jackpotPool() view returns (uint256)",
-    "function tier2Pool() view returns (uint256)",
-    "function tier3Pool() view returns (uint256)",
-    "function specialPool() view returns (uint256)",
+    "function roundJackpotPool(uint256) view returns (uint256)",
+    "function roundTier2Pool(uint256) view returns (uint256)",
+    "function roundTier3Pool(uint256) view returns (uint256)",
+    "function roundSpecialPool(uint256) view returns (uint256)",
     "function roundLastTicketId(uint256) view returns (uint256)",
     "function roundWinningNumbers(uint256) view returns (uint8[6])",
     "function roundIsDrawn(uint256) view returns (bool)",
+    "function roundIsCalculated(uint256) view returns (bool)",
     "function buyTickets(uint8[6][] chosenNumbers) payable",
     "function claimReward(uint256 ticketId) external",
     "function getTicketsByOwner(address _owner) external view returns (uint256[] ticketIds, uint256[] rounds, uint8[6][] numbers, bool[] isClaimeds, bool[] isDestroyeds)"
@@ -277,10 +278,10 @@ async function updateLotteryPoolData() {
     try {
         const currentRound = await lotteryContract.currentRound();
         
-        const jackpot = await lotteryContract.jackpotPool();
-        const t2Pool = await lotteryContract.tier2Pool();
-        const t3Pool = await lotteryContract.tier3Pool();
-        const special = await lotteryContract.specialPool();
+        const jackpot = await lotteryContract.roundJackpotPool(currentRound);
+        const t2Pool = await lotteryContract.roundTier2Pool(currentRound);
+        const t3Pool = await lotteryContract.roundTier3Pool(currentRound);
+        const special = await lotteryContract.roundSpecialPool(currentRound);
         const lastTicketId = await lotteryContract.roundLastTicketId(currentRound);
         const endTime = await lotteryContract.lotteryEndTime();
 
@@ -462,7 +463,7 @@ async function claimReward(ticketId) {
         updateLotteryPoolData();
     } catch (e) { 
         console.error(e);
-        alert("提領失敗，可能獎金已被提領、該票無中獎，或彩券已超過一個月期限作廢。"); 
+        alert("提領失敗，可能獎金已被提領、該票無中獎，或彩券已超過 3 天期限作廢。"); 
     }
 }
 </script>
