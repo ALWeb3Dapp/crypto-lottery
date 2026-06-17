@@ -87,11 +87,11 @@
         <div class="tab-pane fade" id="claim-content" role="tablist">
             <div class="card p-4 shadow-sm border-0">
                 <h4 class="fw-bold mb-3 text-dark">🎁 歷史彩券對獎與獎金提領專區</h4>
-                <p class="text-muted">請注意：當期開獎後，若您的彩券幸運中獎或符合特別獎，可在此直接一鍵點擊「提領獎金」！中獎彩票期限為 1 個月，過期作廢。</p>
+                <p class="text-muted">請注意：當期開獎後，若您的彩券幸運中獎或符合特別獎，可在此直接一鍵點擊「提領獎金」！中獎彩票期限為 <strong class="text-danger">3 天</strong>，過期作廢。</p>
                 
                 <div id="loadingTickets" class="text-center my-4 d-none">
                     <div class="spinner-border text-success" role="status"></div>
-                    <p class="mt-2 text-muted">正在透過方案A高效封裝函數，1鍵秒讀您所有的鏈上彩券...</p>
+                    <p class="mt-2 text-muted">正在讀您所有的鏈上彩券...</p>
                 </div>
 
                 <div id="myTicketsList">
@@ -111,7 +111,7 @@
 // ==========================================
 // ⚙️ 網頁後台 Web3 接線設定 (已自動更換為你的全新精簡版合約地址)
 // ==========================================
-const LOTTERY_CONTRACT_ADDRESS = "0x6cF3ec785BDB68AAf70c27Df9a37d3Ee3070bd55";
+const LOTTERY_CONTRACT_ADDRESS = "0x10F78321083DAb5C2c30565ceF0fA1B9d01F9449";
 
 const CONTRACT_ABI = [
     "function currentRound() view returns (uint256)",
