@@ -277,23 +277,26 @@ async function updateLotteryPoolData() {
     if (!lotteryContract) return;
     try {
         const currentRound = await lotteryContract.currentRound();
-        
-        const jackpot = await lotteryContract.roundJackpotPool(currentRound);
-        const t2Pool = await lotteryContract.roundTier2Pool(currentRound);
-        const t3Pool = await lotteryContract.roundTier3Pool(currentRound);
-        const special = await lotteryContract.roundSpecialPool(currentRound);
-        const lastTicketId = await lotteryContract.roundLastTicketId(currentRound);
         const endTime = await lotteryContract.lotteryEndTime();
 
-        const totalPoolBNB = jackpot.add(t2Pool).add(t3Pool);
-
-        document.getElementById('roundDisplay').innerText = `當前進行中：第 ${currentRound.toString()} 期`;
-        document.getElementById('totalPoolDisplay').innerText = `${parseFloat(ethers.utils.formatEther(totalPoolBNB)).toFixed(4)} BNB`;
-        document.getElementById('specialPoolDisplay').innerText = `${parseFloat(ethers.utils.formatEther(special)).toFixed(4)} BNB`;
-        document.getElementById('lastTicketDisplay').innerText = `當前最後彩票 ID：#${lastTicketId.toString()}`;
+        // (這裡省略獎池讀取的程式碼，保持你原本的即可...)
 
         const endTimeMs = endTime.toNumber() * 1000;
         clearInterval(window.countdownTimer);
+
+        // 🎯 核心改動：如果時間是 0，代表還沒人買
+        if (endTime.toNumber() === 0) {
+            document.getElementById('countdownDisplay').innerText = "等待第一筆投注啟動 5 分鐘倒數！";
+            document.getElementById('countdownDisplay').className = "fw-bold text-success";
+            document.getElementById('buyTicketBtn').innerText = "確認投注 (需支付 0.005 BNB)";
+            isLotteryExpired = false; // 允許購買
+            // 根據是否選滿 6 號來決定按鈕狀態
+            document.getElementById('buyTicketBtn').disabled = selectedNumbers.length !== 6;
+            return; // 直接結束函數，不跑下面的計時器
+        }
+
+        // 如果時間不是 0，就正常跑倒數計時
+        document.getElementById('countdownDisplay').className = "fw-bold text-dark";
         window.countdownTimer = setInterval(() => {
             const now = new Date().getTime();
             const distance = endTimeMs - now;
@@ -310,7 +313,7 @@ async function updateLotteryPoolData() {
                 const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-                document.getElementById('countdownDisplay').innerText = `${days}天 ${hours}小時 ${minutes}分 ${seconds}秒`;
+                document.getElementById('countdownDisplay').innerText = `${minutes}分 ${seconds}秒`;
             }
         }, 1000);
 
