@@ -112,762 +112,208 @@
 
 <script>
 // ==========================================
-// ⚙️ Web3 設定
+// ⚙️ 基本設定
 // ==========================================
 
 const LOTTERY_CONTRACT_ADDRESS = "0x4a5A91ac69B9f014797772d14F6da3eEDA563959";
+const RPC_URL = "https://bsc-testnet-rpc.publicnode.com";
 
-// ✅ 讀取用 RPC，不走 MetaMask，避免 queryFilter 被 RPC 403
-const BSC_TESTNET_RPC_URL = "https://bsc-testnet-rpc.publicnode.com";
+const BSC_TESTNET_CHAIN_ID = 97;
 
-const CONTRACT_ABI = [
-    "function currentRound() view returns (uint256)",
-    "function endTime() view returns (uint256)",
-    "function nextTicketId() view returns (uint256)",
-
-    "function jackpotPool(uint256 round) view returns (uint256)",
-    "function tier2Pool(uint256 round) view returns (uint256)",
-    "function tier3Pool(uint256 round) view returns (uint256)",
-    "function specialPool(uint256 round) view returns (uint256)",
-
-    "function lastTicketId(uint256 round) view returns (uint256)",
-    "function winningMask(uint256 round) view returns (uint256)",
-    "function drawn(uint256 round) view returns (bool)",
-    "function drawTime(uint256 round) view returns (uint256)",
-    "function claimDuration() view returns (uint256)",
-
-    "function winners(uint256 round) view returns (uint256 j, uint256 t2, uint256 t3, bool set)",
-
-    "function buy(uint256[] masks) payable",
-    "function claimBatch(uint256[] ids)",
-    "function tickets(uint256 ticketId) view returns (uint256)",
-
-    "event TicketBought(address indexed user, uint256 indexed ticketId, uint256 indexed round, uint256 mask)"
-];
-
-let provider, signer, lotteryContract;
-let readProvider, readContract;
-
+let provider, signer, contract, readContract, readProvider;
 let userAddress = "";
 let selectedNumbers = [];
-let isLotteryExpired = false;
-let poolRefresher = null;
-let countdownTimer = null;
-
-let vConsoleEnabled = false;
-
-const BSC_TESTNET_CHAIN_ID_DEC = 97;
-const BSC_TESTNET_CHAIN_ID_HEX = "0x61";
 
 // ==========================================
-// ✅ 只在 BSC Testnet 顯示 vConsole
+// ✅ vConsole（只限測試網）
 // ==========================================
-async function enableVConsoleOnlyOnTestnet() {
-    try {
-        if (!window.ethereum) return;
+async function initVConsole() {
+    if (!window.ethereum) return;
 
-        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-        const network = await web3Provider.getNetwork();
+    const p = new ethers.providers.Web3Provider(window.ethereum);
+    const net = await p.getNetwork();
 
-        if (network.chainId !== BSC_TESTNET_CHAIN_ID_DEC) return;
-        if (vConsoleEnabled) return;
+    if (net.chainId !== BSC_TESTNET_CHAIN_ID) return;
 
-        await loadScriptOnce("https://unpkg.com/vconsole@latest/dist/vconsole.min.js");
-
-        if (window.VConsole) {
-            window.vConsole = new window.VConsole();
-            vConsoleEnabled = true;
-            console.log("vConsole enabled on BSC Testnet");
-        }
-    } catch (e) {
-        console.warn("vConsole init skipped:", e);
-    }
-}
-
-function loadScriptOnce(src) {
-    return new Promise((resolve, reject) => {
-        if ([...document.scripts].some(s => s.src === src)) {
-            resolve();
-            return;
-        }
-
-        const script = document.createElement("script");
-        script.src = src;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-}
-
-// ==========================================
-// ✅ 基礎檢查
-// ==========================================
-function validateContractAddress() {
-    const ok = ethers.utils.isAddress(LOTTERY_CONTRACT_ADDRESS);
-
-    console.log("LOTTERY_CONTRACT_ADDRESS =", LOTTERY_CONTRACT_ADDRESS);
-    console.log("isAddress =", ok);
-
-    if (!ok) {
-        alert("Lottery 合約地址格式錯誤，請確認 LOTTERY_CONTRACT_ADDRESS 是完整 0x 開頭地址。");
-        throw new Error("Invalid LOTTERY_CONTRACT_ADDRESS");
-    }
+    const s = document.createElement("script");
+    s.src = "https://unpkg.com/vconsole@latest/dist/vconsole.min.js";
+    s.onload = () => {
+        new window.VConsole();
+        console.log("vConsole enabled");
+    };
+    document.head.appendChild(s);
 }
 
 // ==========================================
 // ✅ 初始化
 // ==========================================
 window.addEventListener("load", async () => {
-    validateContractAddress();
+    readProvider = new ethers.providers.JsonRpcProvider(RPC_URL);
+    readContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, readProvider);
 
-    const grid = document.getElementById("numberGrid");
+    contract = readContract;
 
-    if (grid) {
-        grid.innerHTML = "";
-
-        for (let i = 1; i <= 49; i++) {
-            const btn = document.createElement("button");
-            btn.innerText = i;
-            btn.id = `num-btn-${i}`;
-            btn.className = "btn btn-outline-secondary number-btn";
-            btn.onclick = () => selectNumber(i, btn);
-            grid.appendChild(btn);
-        }
-    }
-
-    await enableVConsoleOnlyOnTestnet();
-    await initStaticData();
+    await initVConsole();
 });
 
-if (window.ethereum) {
-    window.ethereum.on("chainChanged", () => {
-        window.location.reload();
-    });
-
-    window.ethereum.on("accountsChanged", () => {
-        window.location.reload();
-    });
-}
-
 // ==========================================
-// ✅ 靜態初始化：讀取資料一律用 read-only RPC
-// ==========================================
-async function initStaticData() {
-    try {
-        validateContractAddress();
-
-        readProvider = new ethers.providers.JsonRpcProvider(BSC_TESTNET_RPC_URL);
-        readContract = new ethers.Contract(
-            LOTTERY_CONTRACT_ADDRESS,
-            CONTRACT_ABI,
-            readProvider
-        );
-
-        if (window.ethereum) {
-            provider = new ethers.providers.Web3Provider(window.ethereum);
-        }
-
-        lotteryContract = readContract;
-
-        await updateLotteryPoolData();
-
-        if (poolRefresher) clearInterval(poolRefresher);
-        poolRefresher = setInterval(updateLotteryPoolData, 8000);
-
-    } catch (e) {
-        console.error("靜態初始化失敗:", e);
-    }
-}
-
-// ==========================================
-// ✅ BSC Testnet 網路檢查
-// ==========================================
-async function _forceEnsureBSCTestnet(web3Provider) {
-    const { chainId } = await web3Provider.getNetwork();
-
-    if (chainId !== BSC_TESTNET_CHAIN_ID_DEC) {
-        try {
-            await window.ethereum.request({
-                method: "wallet_switchEthereumChain",
-                params: [{ chainId: BSC_TESTNET_CHAIN_ID_HEX }]
-            });
-
-            provider = new ethers.providers.Web3Provider(window.ethereum);
-
-            return true;
-        } catch (switchError) {
-            console.error("切換 BSC Testnet 失敗:", switchError);
-            alert("請先將錢包網路切換至 BSC 測試網！");
-            return false;
-        }
-    }
-
-    return true;
-}
-
-// ==========================================
-// ✅ 連結錢包
+// ✅ 連錢包
 // ==========================================
 async function connectWallet() {
-    if (!window.ethereum) {
-        alert("請先安裝 MetaMask 錢包外掛！");
-        return;
-    }
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
 
-    try {
-        validateContractAddress();
+    signer = provider.getSigner();
+    userAddress = await signer.getAddress();
 
-        if (poolRefresher) clearInterval(poolRefresher);
-
-        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-
-        const isCorrectNet = await _forceEnsureBSCTestnet(web3Provider);
-        if (!isCorrectNet) return;
-
-        await web3Provider.send("eth_requestAccounts", []);
-
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        signer = provider.getSigner();
-        userAddress = await signer.getAddress();
-
-        lotteryContract = new ethers.Contract(
-            LOTTERY_CONTRACT_ADDRESS,
-            CONTRACT_ABI,
-            signer
-        );
-
-        readProvider = new ethers.providers.JsonRpcProvider(BSC_TESTNET_RPC_URL);
-        readContract = new ethers.Contract(
-            LOTTERY_CONTRACT_ADDRESS,
-            CONTRACT_ABI,
-            readProvider
-        );
-
-        await enableVConsoleOnlyOnTestnet();
-
-        document.getElementById("connectWalletBtn").innerText = "已連結";
-        document.getElementById("connectWalletBtn").className = "btn btn-success fw-bold";
-
-        const display = document.getElementById("walletAddressDisplay");
-        display.innerText = `目前帳號：${userAddress}`;
-        display.classList.remove("d-none");
-
-        await updateLotteryPoolData();
-        await loadMyTickets();
-
-        poolRefresher = setInterval(updateLotteryPoolData, 8000);
-
-    } catch (error) {
-        console.error("連線錢包時發生錯誤：", error);
-        alert("連線錢包失敗，請查看 vConsole 或瀏覽器 Console。");
-    }
+    contract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 }
 
 // ==========================================
-// ✅ 號碼選擇
-// ==========================================
-function selectNumber(num, btn) {
-    if (selectedNumbers.includes(num)) {
-        selectedNumbers = selectedNumbers.filter(n => n !== num);
-        btn.classList.remove("btn-success", "text-white");
-        btn.classList.add("btn-outline-secondary");
-    } else {
-        if (selectedNumbers.length >= 6) {
-            alert("每張彩券只能選擇 6 個號碼！");
-            return;
-        }
-
-        selectedNumbers.push(num);
-        btn.classList.remove("btn-outline-secondary");
-        btn.classList.add("btn-success", "text-white");
-    }
-
-    selectedNumbers.sort((a, b) => a - b);
-    updateSelectedDisplay();
-}
-
-function autoSelectNumbers() {
-    selectedNumbers = [];
-
-    const btns = document.querySelectorAll(".number-btn");
-
-    btns.forEach(b => {
-        b.classList.remove("btn-success", "text-white");
-        b.classList.add("btn-outline-secondary");
-    });
-
-    while (selectedNumbers.length < 6) {
-        const randNum = Math.floor(Math.random() * 49) + 1;
-
-        if (!selectedNumbers.includes(randNum)) {
-            selectedNumbers.push(randNum);
-        }
-    }
-
-    selectedNumbers.sort((a, b) => a - b);
-
-    selectedNumbers.forEach(num => {
-        const btn = document.getElementById(`num-btn-${num}`);
-
-        if (btn) {
-            btn.classList.remove("btn-outline-secondary");
-            btn.classList.add("btn-success", "text-white");
-        }
-    });
-
-    updateSelectedDisplay();
-}
-
-function updateSelectedDisplay() {
-    document.getElementById("selectedNumbersDisplay").innerText =
-        selectedNumbers.length > 0 ? selectedNumbers.join(", ") : "尚未選擇";
-
-    const buyBtn = document.getElementById("buyTicketBtn");
-
-    if (isLotteryExpired) {
-        buyBtn.disabled = true;
-    } else {
-        buyBtn.disabled = selectedNumbers.length !== 6;
-    }
-}
-
-// ==========================================
-// ✅ bitmask encode / decode
-// 合約 MASK_SHIFT = 14，號碼本身 bit 1 ~ 49
+// ✅ encode mask
 // ==========================================
 function encodeMask(numbers) {
     let mask = ethers.BigNumber.from(0);
-
-    for (const n of numbers) {
+    numbers.forEach(n => {
         mask = mask.or(ethers.BigNumber.from(1).shl(n));
-    }
-
+    });
     return mask;
 }
 
-function decodeMask(mask) {
-    const nums = [];
+// ==========================================
+// ✅ ✅ 買票（含快取）
+// ==========================================
+async function buyTicket() {
+    const mask = encodeMask(selectedNumbers);
 
+    const tx = await contract.buy([mask], {
+        value: ethers.utils.parseEther("0.005")
+    });
+
+    await tx.wait();
+
+    // ✅ 儲存 ticketId（核心）
+    const nextId = await readContract.nextTicketId();
+    const ticketId = nextId.toNumber() - 1;
+
+    let saved = JSON.parse(localStorage.getItem("myTickets") || "[]");
+
+    saved.push({
+        address: userAddress,
+        id: ticketId
+    });
+
+    localStorage.setItem("myTickets", JSON.stringify(saved));
+
+    alert("✅ 購買成功");
+}
+
+// ==========================================
+// ✅ 解析 packed
+// ==========================================
+function getOwner(packed) {
+    return "0x" + packed.shr(96).toHexString().slice(-40);
+}
+
+function getRound(packed) {
+    return packed.shr(64).and("0xffffffff").toNumber();
+}
+
+function getMask(packed) {
+    return packed.shr(14).and(ethers.BigNumber.from(2).pow(50).sub(1));
+}
+
+function decodeMask(mask) {
+    let nums = [];
     for (let i = 1; i <= 49; i++) {
         if (mask.and(ethers.BigNumber.from(1).shl(i)).gt(0)) {
             nums.push(i);
         }
     }
-
     return nums;
 }
 
-function getOwnerFromPacked(packed) {
-    const ownerPart = packed.shr(96);
-    const hex = ownerPart.toHexString().replace("0x", "").padStart(40, "0").slice(-40);
-    return ethers.utils.getAddress("0x" + hex);
-}
+// ==========================================
+// ✅ ✅ fallback 掃描（只掃 100 張）
+// ==========================================
+async function fallbackScan() {
+    const nextId = await readContract.nextTicketId();
+    let latest = nextId.toNumber() - 1;
 
-function getRoundFromPacked(packed) {
-    return packed.shr(64).and(ethers.BigNumber.from("0xffffffff")).toNumber();
-}
+    let found = [];
 
-function getMaskFromPacked(packed) {
-    return packed.shr(14).and(ethers.BigNumber.from(2).pow(50).sub(1));
-}
+    for (let i = latest; i > latest - 100 && i > 0; i--) {
+        const packed = await readContract.tickets(i);
 
-function isClaimedFromPacked(packed) {
-    return packed.and(1).eq(1);
-}
+        if (packed.isZero()) continue;
 
-function calculateMatches(ticketNums, winningNums) {
-    let matches = 0;
+        const owner = getOwner(packed);
 
-    for (let i = 0; i < ticketNums.length; i++) {
-        if (winningNums.includes(ticketNums[i])) {
-            matches++;
+        if (owner.toLowerCase() === userAddress.toLowerCase()) {
+            found.push({ id: i, packed });
         }
     }
 
-    return matches;
+    return found;
 }
 
 // ==========================================
-// ✅ 更新獎池與倒數
+// ✅ ✅ 讀票（超快版本）
 // ==========================================
-async function updateLotteryPoolData() {
-    const contract = readContract || lotteryContract;
-    if (!contract) return;
-
-    try {
-        const currentRoundBN = await contract.currentRound();
-        const currentRound = currentRoundBN.toNumber();
-
-        const endTime = await contract.endTime();
-
-        const jackpot = await contract.jackpotPool(currentRound);
-        const tier2 = await contract.tier2Pool(currentRound);
-        const tier3 = await contract.tier3Pool(currentRound);
-        const special = await contract.specialPool(currentRound);
-
-        const totalPool = jackpot.add(tier2).add(tier3);
-
-        document.getElementById("totalPoolDisplay").innerText =
-            parseFloat(ethers.utils.formatEther(totalPool)).toFixed(4) + " BNB";
-
-        document.getElementById("specialPoolDisplay").innerText =
-            parseFloat(ethers.utils.formatEther(special)).toFixed(4) + " BNB";
-
-        document.getElementById("roundDisplay").innerText =
-            `當前期數：第 ${currentRound} 期`;
-
-        try {
-            const nextId = await contract.nextTicketId();
-
-            if (endTime.eq(0)) {
-                document.getElementById("lastTicketDisplay").innerText =
-                    "當前最後彩票 ID：尚未啟動";
-            } else if (nextId.gt(0)) {
-                const lastId = await contract.lastTicketId(currentRound);
-                document.getElementById("lastTicketDisplay").innerText =
-                    `當前最後彩票 ID：${lastId.toString()}`;
-            } else {
-                document.getElementById("lastTicketDisplay").innerText =
-                    "當前最後彩票 ID：--";
-            }
-        } catch (e) {
-            console.log("讀取最後彩票 ID 失敗:", e);
-        }
-
-        if (countdownTimer) clearInterval(countdownTimer);
-
-        if (endTime.eq(0)) {
-            document.getElementById("countdownDisplay").innerText =
-                "等待第一筆投注啟動倒數";
-
-            document.getElementById("countdownDisplay").className =
-                "fw-bold text-success";
-
-            document.getElementById("buyTicketBtn").innerText =
-                "確認投注 (需支付 0.005 BNB)";
-
-            isLotteryExpired = false;
-
-            document.getElementById("buyTicketBtn").disabled =
-                selectedNumbers.length !== 6;
-
-            return;
-        }
-
-        document.getElementById("countdownDisplay").className =
-            "fw-bold text-dark";
-
-        const endTimeMs = endTime.toNumber() * 1000;
-
-        countdownTimer = setInterval(() => {
-            const now = Date.now();
-            const distance = endTimeMs - now;
-
-            if (distance <= 0) {
-                document.getElementById("countdownDisplay").innerText =
-                    "本期已到期，等待 VRF 開獎與 Oracle 計算中！";
-
-                document.getElementById("buyTicketBtn").innerText =
-                    "本期已截止投注，請等待開獎";
-
-                document.getElementById("buyTicketBtn").disabled = true;
-                isLotteryExpired = true;
-
-                clearInterval(countdownTimer);
-            } else {
-                isLotteryExpired = false;
-
-                document.getElementById("buyTicketBtn").innerText =
-                    "確認投注 (需支付 0.005 BNB)";
-
-                document.getElementById("buyTicketBtn").disabled =
-                    selectedNumbers.length !== 6;
-
-                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-                document.getElementById("countdownDisplay").innerText =
-                    `${days}天 ${hours}小時 ${minutes}分 ${seconds}秒`;
-            }
-        }, 1000);
-
-    } catch (e) {
-        console.error("刷新鏈上即時獎池失敗：", e);
-    }
-}
-
-// ==========================================
-// ✅ 購買彩券
-// ==========================================
-async function buyTicket() {
-    if (!window.ethereum) {
-        alert("請先安裝 MetaMask 錢包！");
-        return;
-    }
-
-    try {
-        validateContractAddress();
-
-        const currentProvider = new ethers.providers.Web3Provider(window.ethereum);
-        const isCorrectNet = await _forceEnsureBSCTestnet(currentProvider);
-
-        if (!isCorrectNet) return;
-
-        if (!signer) {
-            alert("請先點擊上方按鈕連結 MetaMask 錢包！");
-            await connectWallet();
-            return;
-        }
-
-        if (selectedNumbers.length !== 6) return;
-
-        if (isLotteryExpired) {
-            alert("🚨 投注失敗：本期樂透已截止倒數！請等待開獎。");
-            return;
-        }
-
-        const ticketPrice = ethers.utils.parseEther("0.005");
-        const mask = encodeMask(selectedNumbers);
-
-        const activeContract = new ethers.Contract(
-            LOTTERY_CONTRACT_ADDRESS,
-            CONTRACT_ABI,
-            signer
-        );
-
-        const tx = await activeContract.buy([mask], {
-            value: ticketPrice
-        });
-
-        alert("彩券交易已送出，等待區塊鏈打包中...");
-
-        await tx.wait();
-
-        alert("🎉 購買成功！彩券已登記於鏈上。");
-
-        selectedNumbers = [];
-        document.getElementById("selectedNumbersDisplay").innerText = "尚未選擇";
-        document.getElementById("buyTicketBtn").disabled = true;
-
-        const btns = document.querySelectorAll(".number-btn");
-        btns.forEach(b => {
-            b.className = "btn btn-outline-secondary number-btn";
-        });
-
-        await updateLotteryPoolData();
-
-        if (userAddress) {
-            await loadMyTickets();
-        }
-
-    } catch (err) {
-        console.error(err);
-
-        const msg =
-            err?.error?.message ||
-            err?.data?.message ||
-            err?.reason ||
-            err?.message ||
-            String(err);
-
-        alert("交易失敗原因: " + msg);
-    }
-}
-
-// ==========================================
-// ✅ 分段查詢 Event，避免節點拒絕大範圍 getLogs
-// ==========================================
-async function queryTicketBoughtEventsByChunks(contract, user, fromBlock, toBlock) {
-    const allEvents = [];
-    const chunkSize = 5000;
-
-    for (let start = fromBlock; start <= toBlock; start += chunkSize) {
-        const end = Math.min(start + chunkSize - 1, toBlock);
-
-        const filter = contract.filters.TicketBought(
-            user,
-            null,
-            null
-        );
-
-        try {
-            const events = await contract.queryFilter(filter, start, end);
-            allEvents.push(...events);
-        } catch (e) {
-            console.warn(`queryFilter failed: ${start} - ${end}`, e);
-        }
-    }
-
-    return allEvents;
-}
-
-// ==========================================
-// ✅ 載入我的彩券
-// ==========================================
-
 async function loadMyTickets() {
     if (!userAddress) return;
 
-    const contract = readContract || lotteryContract;
-    if (!contract) return;
+    let saved = JSON.parse(localStorage.getItem("myTickets") || "[]");
 
-    const container = document.getElementById("myTicketsList");
-    const loader = document.getElementById("loadingTickets");
+    let myTickets = saved.filter(t =>
+        t.address.toLowerCase() === userAddress.toLowerCase()
+    );
 
-    loader.classList.remove("d-none");
-    container.innerHTML = "";
+    let result = [];
 
-    try {
-        const nextId = await contract.nextTicketId();
+    if (myTickets.length === 0) {
+        console.log("⚠️ 用 fallback 掃描");
+        result = await fallbackScan();
+    } else {
+        console.log("✅ 使用 cache");
 
-        if (nextId.eq(0)) {
-            container.innerHTML =
-                `<div class="text-center py-5 text-muted">目前還沒有任何彩券。</div>`;
-            return;
-        }
+        // ✅ 批次查詢（加速）
+        const batches = await Promise.all(
+            myTickets.map(t => readContract.tickets(t.id))
+        );
 
-        const latest = nextId.toNumber() - 1;
-
-        // ✅ 限制掃描數量（避免太重）
-        const MAX_SCAN = 200;
-        const start = Math.max(1, latest - MAX_SCAN + 1);
-
-        let found = [];
-
-        for (let id = latest; id >= start; id--) {
-            try {
-                const packed = await contract.tickets(id);
-
-                if (packed.isZero()) continue;
-
-                const owner = getOwnerFromPacked(packed);
-
-                if (owner.toLowerCase() !== userAddress.toLowerCase()) continue;
-
-                found.push({ id, packed });
-
-            } catch (e) {
-                console.warn("讀 ticket 失敗:", id, e);
-            }
-        }
-
-        if (found.length === 0) {
-            container.innerHTML =
-                `<div class="text-center py-5 text-muted">您目前沒有彩券。</div>`;
-            return;
-        }
-
-        for (const t of found) {
-            const id = t.id;
-            const packed = t.packed;
-
-            const roundNum = getRoundFromPacked(packed);
-            const mask = getMaskFromPacked(packed);
-            const nums = decodeMask(mask);
-            const isClaimed = isClaimedFromPacked(packed);
-
-            const isDrawn = await contract.drawn(roundNum);
-
-            const card = document.createElement("div");
-            card.className = "card ticket-card p-3 shadow-sm bg-white mb-3";
-
-            let statusBadge = "";
-            let actionButton = "";
-
-            if (isClaimed) {
-                statusBadge =
-                    `<span class="badge bg-secondary fs-6">✅ 已提領</span>`;
-            } else if (!isDrawn) {
-                statusBadge =
-                    `<span class="badge bg-warning text-dark fs-6">⏳ 等待開獎</span>`;
-            } else {
-                const w = await contract.winners(roundNum);
-                const winMask = await contract.winningMask(roundNum);
-
-                const winningNums = decodeMask(winMask);
-                const matches = calculateMatches(nums, winningNums);
-
-                if (w.set && matches >= 4) {
-                    statusBadge =
-                        `<span class="badge bg-success fs-6">🎉 中獎 (${matches}星)</span>`;
-
-                    actionButton = `
-                        <div class="mt-2">
-                            <button class="btn btn-sm btn-success" onclick="claimReward(${id})">
-                                提領獎金
-                            </button>
-                        </div>`;
-                } else {
-                    statusBadge =
-                        `<span class="badge bg-danger fs-6">❌ 未中獎</span>`;
-                }
-            }
-
-            card.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6>彩券 #${id}（第 ${roundNum} 期）</h6>
-                        <div><strong>${nums.join(", ")}</strong></div>
-                    </div>
-                    <div>${statusBadge}</div>
-                </div>
-                ${actionButton}
-            `;
-
-            container.appendChild(card);
-        }
-
-    } catch (err) {
-        console.error("讀取彩券錯誤:", err);
-
-        container.innerHTML =
-            `<div class="text-danger text-center">讀取失敗：${err.message}</div>`;
-    } finally {
-        loader.classList.add("d-none");
+        result = myTickets.map((t, i) => ({
+            id: t.id,
+            packed: batches[i]
+        }));
     }
+
+    renderTickets(result);
 }
 
 // ==========================================
-// ✅ 領獎
+// ✅ 顯示票
 // ==========================================
-async function claimReward(ticketId) {
-    try {
-        if (!signer) {
-            alert("請先連結錢包！");
-            return;
-        }
+async function renderTickets(list) {
+    let html = "";
 
-        const activeContract = new ethers.Contract(
-            LOTTERY_CONTRACT_ADDRESS,
-            CONTRACT_ABI,
-            signer
-        );
+    for (const t of list) {
+        const id = t.id;
+        const packed = t.packed;
 
-        const tx = await activeContract.claimBatch([ticketId]);
+        const nums = decodeMask(getMask(packed));
+        const round = getRound(packed);
 
-        alert("提領獎金交易已送出，正在等待區塊鏈確認...");
-
-        await tx.wait();
-
-        alert("💰 獎金提領成功！彩券已於區塊鏈標記為已領取。");
-
-        await loadMyTickets();
-        await updateLotteryPoolData();
-
-    } catch (e) {
-        console.error(e);
-
-        const msg =
-            e?.error?.message ||
-            e?.data?.message ||
-            e?.reason ||
-            e?.message ||
-            String(e);
-
-        alert("提領失敗：" + msg);
+        html += `
+            <div>
+                🎟️ #${id}（第 ${round} 期）
+                <br/>${nums.join(", ")}
+            </div>
+            <hr/>
+        `;
     }
+
+    document.getElementById("myTicketsList").innerHTML = html;
 }
 </script>
 
