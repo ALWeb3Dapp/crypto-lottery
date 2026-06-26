@@ -706,13 +706,12 @@ async function queryTicketBoughtEventsByChunks(contract, user, fromBlock, toBloc
 // ==========================================
 // ✅ 載入我的彩券
 // ==========================================
+
 async function loadMyTickets() {
     if (!userAddress) return;
 
     const contract = readContract || lotteryContract;
-    const rpcProvider = readProvider || provider;
-
-    if (!contract || !rpcProvider) return;
+    if (!contract) return;
 
     const container = document.getElementById("myTicketsList");
     const loader = document.getElementById("loadingTickets");
@@ -721,43 +720,52 @@ async function loadMyTickets() {
     container.innerHTML = "";
 
     try {
-        const latest = await rpcProvider.getBlockNumber();
+        const nextId = await contract.nextTicketId();
 
-        // 先查最近 50000 區塊，並用分段避免 403
-        const fromBlock = Math.max(0, latest - 50000);
-
-        const events = await queryTicketBoughtEventsByChunks(
-            contract,
-            userAddress,
-            fromBlock,
-            latest
-        );
-
-        if (events.length === 0) {
+        if (nextId.eq(0)) {
             container.innerHTML =
-                `<div class="text-center py-5 text-muted">您目前在測試網尚無購買此樂透的彩券紀錄。</div>`;
+                `<div class="text-center py-5 text-muted">目前還沒有任何彩券。</div>`;
             return;
         }
 
-        events.sort((a, b) => {
-            const aid = a.args.ticketId.toNumber();
-            const bid = b.args.ticketId.toNumber();
-            return bid - aid;
-        });
+        const latest = nextId.toNumber() - 1;
 
-        for (const ev of events) {
-            const id = ev.args.ticketId.toNumber();
-            const packed = await contract.tickets(id);
+        // ✅ 限制掃描數量（避免太重）
+        const MAX_SCAN = 200;
+        const start = Math.max(1, latest - MAX_SCAN + 1);
 
-            if (packed.isZero()) continue;
+        let found = [];
 
-            const owner = getOwnerFromPacked(packed);
+        for (let id = latest; id >= start; id--) {
+            try {
+                const packed = await contract.tickets(id);
 
-            if (owner.toLowerCase() !== userAddress.toLowerCase()) continue;
+                if (packed.isZero()) continue;
+
+                const owner = getOwnerFromPacked(packed);
+
+                if (owner.toLowerCase() !== userAddress.toLowerCase()) continue;
+
+                found.push({ id, packed });
+
+            } catch (e) {
+                console.warn("讀 ticket 失敗:", id, e);
+            }
+        }
+
+        if (found.length === 0) {
+            container.innerHTML =
+                `<div class="text-center py-5 text-muted">您目前沒有彩券。</div>`;
+            return;
+        }
+
+        for (const t of found) {
+            const id = t.id;
+            const packed = t.packed;
 
             const roundNum = getRoundFromPacked(packed);
             const mask = getMaskFromPacked(packed);
-            const currentNumbers = decodeMask(mask);
+            const nums = decodeMask(mask);
             const isClaimed = isClaimedFromPacked(packed);
 
             const isDrawn = await contract.drawn(roundNum);
@@ -770,73 +778,38 @@ async function loadMyTickets() {
 
             if (isClaimed) {
                 statusBadge =
-                    `<span class="badge bg-secondary fs-6">✅ 已提領並銷毀此券</span>`;
+                    `<span class="badge bg-secondary fs-6">✅ 已提領</span>`;
             } else if (!isDrawn) {
                 statusBadge =
-                    `<span class="badge bg-warning text-dark fs-6">⏳ 等待當期開獎中</span>`;
+                    `<span class="badge bg-warning text-dark fs-6">⏳ 等待開獎</span>`;
             } else {
                 const w = await contract.winners(roundNum);
-                const winnersSet = w.set;
+                const winMask = await contract.winningMask(roundNum);
 
-                if (!winnersSet) {
+                const winningNums = decodeMask(winMask);
+                const matches = calculateMatches(nums, winningNums);
+
+                if (w.set && matches >= 4) {
                     statusBadge =
-                        `<span class="badge bg-info text-dark fs-6">🔄 已開獎，等待 Oracle 計算中</span>`;
+                        `<span class="badge bg-success fs-6">🎉 中獎 (${matches}星)</span>`;
+
+                    actionButton = `
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-success" onclick="claimReward(${id})">
+                                提領獎金
+                            </button>
+                        </div>`;
                 } else {
-                    const winningMask = await contract.winningMask(roundNum);
-                    const winningNumbers = decodeMask(winningMask);
-
-                    const matchCount = calculateMatches(currentNumbers, winningNumbers);
-
-                    const lastTicketIdOfRound = await contract.lastTicketId(roundNum);
-                    const isSpecialWinner = id === lastTicketIdOfRound.toNumber();
-
-                    const drawTime = await contract.drawTime(roundNum);
-                    const claimDuration = await contract.claimDuration();
-
-                    const nowSec = Math.floor(Date.now() / 1000);
-                    const expired = nowSec > drawTime.toNumber() + claimDuration.toNumber();
-
-                    if (expired) {
-                        statusBadge =
-                            `<span class="badge bg-dark fs-6">⌛ 已超過領獎期限</span>`;
-                    } else if (matchCount >= 4 || isSpecialWinner) {
-                        let rewardName = "";
-
-                        if (matchCount === 6) {
-                            rewardName = "頭獎 6 星";
-                        } else if (matchCount === 5) {
-                            rewardName = "二獎 5 星";
-                        } else if (matchCount === 4) {
-                            rewardName = "三獎 4 星";
-                        } else {
-                            rewardName = "未中一般獎";
-                        }
-
-                        if (isSpecialWinner) {
-                            rewardName += " + 🔥 特別獎";
-                        }
-
-                        statusBadge =
-                            `<span class="badge bg-success fs-6">🎉 恭喜符合中獎條件 (${rewardName})</span>`;
-
-                        actionButton = `
-                            <div class="mt-2">
-                                <button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${id})">
-                                    一鍵提領獎金 (領後銷毀)
-                                </button>
-                            </div>`;
-                    } else {
-                        statusBadge =
-                            `<span class="badge bg-danger fs-6">❌ 未中獎 (僅對中 ${matchCount} 星)</span>`;
-                    }
+                    statusBadge =
+                        `<span class="badge bg-danger fs-6">❌ 未中獎</span>`;
                 }
             }
 
             card.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="fw-bold mb-1 text-secondary">彩券 ID: #${id} (第 ${roundNum} 期)</h6>
-                        <p class="mb-0 fs-5 fw-bold text-dark">選號：${currentNumbers.join(", ")}</p>
+                        <h6>彩券 #${id}（第 ${roundNum} 期）</h6>
+                        <div><strong>${nums.join(", ")}</strong></div>
                     </div>
                     <div>${statusBadge}</div>
                 </div>
@@ -847,19 +820,10 @@ async function loadMyTickets() {
         }
 
     } catch (err) {
-        console.error("讀取彩券資料失敗：", err);
-
-        const msg =
-            err?.error?.message ||
-            err?.data?.message ||
-            err?.reason ||
-            err?.message ||
-            String(err);
+        console.error("讀取彩券錯誤:", err);
 
         container.innerHTML =
-            `<div class="text-center py-5 text-danger">
-                讀取鏈上彩券資料失敗：${msg}
-            </div>`;
+            `<div class="text-danger text-center">讀取失敗：${err.message}</div>`;
     } finally {
         loader.classList.add("d-none");
     }
