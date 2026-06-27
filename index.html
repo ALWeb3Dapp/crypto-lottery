@@ -160,6 +160,8 @@ let countdownTimer = null;
 let vConsoleEnabled = false;
 
 const CACHE_PREFIX = "cryptoLottery_myTickets_";
+const FALLBACK_SCAN_LIMIT = 1000;
+const FALLBACK_BATCH_SIZE = 25;
 
 // ==========================================
 // ✅ vConsole：只在 BSC Testnet 顯示
@@ -245,6 +247,8 @@ window.addEventListener("load", async () => {
             grid.appendChild(btn);
         }
     }
+
+    injectReloadTicketsButton();
 
     await enableVConsoleOnlyOnTestnet();
     await initStaticData();
@@ -366,6 +370,8 @@ async function connectWallet() {
         const display = document.getElementById("walletAddressDisplay");
         display.innerText = `目前帳號：${userAddress}`;
         display.classList.remove("d-none");
+
+        updateReloadTicketButtonText();
 
         await updateLotteryPoolData();
         await loadMyTickets();
@@ -520,7 +526,11 @@ function getSavedTicketIds() {
         const arr = JSON.parse(raw);
         if (!Array.isArray(arr)) return [];
 
-        return [...new Set(arr.map(x => Number(x)).filter(x => Number.isInteger(x) && x >= 0))];
+        return [...new Set(
+            arr
+                .map(x => Number(x))
+                .filter(x => Number.isInteger(x) && x >= 0)
+        )];
     } catch {
         return [];
     }
@@ -530,7 +540,11 @@ function saveTicketIds(ids) {
     if (!userAddress) return;
 
     const key = getCacheKey(userAddress);
-    const clean = [...new Set(ids.map(x => Number(x)).filter(x => Number.isInteger(x) && x >= 0))];
+    const clean = [...new Set(
+        ids
+            .map(x => Number(x))
+            .filter(x => Number.isInteger(x) && x >= 0)
+    )];
 
     localStorage.setItem(key, JSON.stringify(clean));
 }
@@ -545,7 +559,96 @@ function appendTicketId(id) {
 }
 
 // ==========================================
-// ✅ 從交易 receipt 解析 TicketBought event
+// ✅ 自動插入讀取鏈上票券按鈕
+// ==========================================
+
+function injectReloadTicketsButton() {
+    const myTicketsList = document.getElementById("myTicketsList");
+
+    if (!myTicketsList) return;
+    if (document.getElementById("reloadTicketsBtn")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "mb-3 text-end";
+
+    wrapper.innerHTML = `
+        <button id="reloadTicketsBtn" class="btn btn-outline-primary btn-sm fw-bold" onclick="forceReloadTicketsFromChain()">
+            🔄 讀取鏈上票券
+        </button>
+        <div id="reloadTicketsHint" class="form-text text-muted mt-1">
+            第一次使用或更換裝置時，請按此從鏈上讀取近期票券。
+        </div>
+    `;
+
+    myTicketsList.parentNode.insertBefore(wrapper, myTicketsList);
+}
+
+function updateReloadTicketButtonText() {
+    const btn = document.getElementById("reloadTicketsBtn");
+    const hint = document.getElementById("reloadTicketsHint");
+
+    if (!btn || !userAddress) return;
+
+    const ids = getSavedTicketIds();
+
+    if (ids.length === 0) {
+        btn.innerText = "🔄 讀取鏈上票券";
+
+        if (hint) {
+            hint.innerText = "第一次使用或更換裝置時，請按此從鏈上讀取近期票券。";
+        }
+    } else {
+        btn.innerText = "🔄 重新讀取鏈上票券";
+
+        if (hint) {
+            hint.innerText = "如果彩券沒有顯示、換裝置或快取遺失，請按此重新掃描近期鏈上票券。";
+        }
+    }
+}
+
+// ==========================================
+// ✅ 強制重新掃鏈找回票券
+// ==========================================
+
+async function forceReloadTicketsFromChain() {
+    if (!userAddress) {
+        alert("請先連結錢包！");
+        return;
+    }
+
+    const btn = document.getElementById("reloadTicketsBtn");
+
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "🔄 正在讀取鏈上票券...";
+        }
+
+        const ids = await fallbackScanRecentTickets(FALLBACK_SCAN_LIMIT);
+
+        if (ids.length > 0) {
+            saveTicketIds(ids);
+            alert(`✅ 已從鏈上找回 ${ids.length} 張彩券`);
+        } else {
+            alert("目前在近期鏈上紀錄中沒有找到你的彩券。");
+        }
+
+        updateReloadTicketButtonText();
+        await loadMyTickets();
+
+    } catch (e) {
+        console.error("重新讀取鏈上票券失敗:", e);
+        alert("重新讀取失敗，請查看 vConsole 或稍後再試。");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            updateReloadTicketButtonText();
+        }
+    }
+}
+
+// ==========================================
+// ✅ 從購買 receipt 解析 TicketBought event
 // ==========================================
 
 function extractTicketIdsFromReceipt(receipt) {
@@ -734,10 +837,11 @@ async function buyTicket() {
         if (boughtIds.length > 0) {
             boughtIds.forEach(id => appendTicketId(id));
         } else {
-            // fallback：若 event 解析失敗，保守用 nextTicketId - 1
             const nextId = await readContract.nextTicketId();
             appendTicketId(nextId.toNumber() - 1);
         }
+
+        updateReloadTicketButtonText();
 
         alert("🎉 購買成功！彩券已登記於鏈上。");
 
@@ -788,31 +892,43 @@ async function fallbackScanRecentTickets(limit = 100) {
         const latest = nextId.toNumber() - 1;
         const start = Math.max(0, latest - limit + 1);
 
-        for (let id = latest; id >= start; id--) {
-            try {
-                const packed = await contract.tickets(id);
+        for (let batchEnd = latest; batchEnd >= start; batchEnd -= FALLBACK_BATCH_SIZE) {
+            const batchStart = Math.max(start, batchEnd - FALLBACK_BATCH_SIZE + 1);
 
-                if (packed.isZero()) {
-                    if (id === 0) break;
-                    continue;
-                }
+            const ids = [];
 
-                const owner = getOwnerFromPacked(packed);
-
-                if (owner.toLowerCase() === userAddress.toLowerCase()) {
-                    found.push(id);
-                }
-            } catch (e) {
-                console.warn("fallback scan ticket failed:", id, e);
+            for (let id = batchEnd; id >= batchStart; id--) {
+                ids.push(id);
             }
 
-            if (id === 0) break;
+            const packedList = await Promise.all(
+                ids.map(async id => {
+                    try {
+                        const packed = await contract.tickets(id);
+                        return { id, packed };
+                    } catch (e) {
+                        console.warn("讀取 ticket 失敗:", id, e);
+                        return null;
+                    }
+                })
+            );
+
+            for (const item of packedList) {
+                if (!item || !item.packed || item.packed.isZero()) continue;
+
+                const owner = getOwnerFromPacked(item.packed);
+
+                if (owner.toLowerCase() === userAddress.toLowerCase()) {
+                    found.push(item.id);
+                }
+            }
         }
+
     } catch (e) {
         console.warn("fallbackScanRecentTickets failed:", e);
     }
 
-    return found;
+    return [...new Set(found)];
 }
 
 // ==========================================
@@ -843,6 +959,8 @@ async function loadMyTickets() {
                 saveTicketIds(ids);
             }
         }
+
+        updateReloadTicketButtonText();
 
         if (ids.length === 0) {
             container.innerHTML =
