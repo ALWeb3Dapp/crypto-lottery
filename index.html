@@ -587,7 +587,17 @@ function updateReloadTicketButtonText() {
     const btn = document.getElementById("reloadTicketsBtn");
     const hint = document.getElementById("reloadTicketsHint");
 
-    if (!btn || !userAddress) return;
+    if (!btn) return;
+
+    if (!userAddress) {
+        btn.innerText = "🔄 讀取鏈上票券";
+
+        if (hint) {
+            hint.innerText = "請先連結錢包，再從鏈上讀取近期票券。";
+        }
+
+        return;
+    }
 
     const ids = getSavedTicketIds();
 
@@ -625,6 +635,8 @@ async function forceReloadTicketsFromChain() {
         }
 
         const ids = await fallbackScanRecentTickets(FALLBACK_SCAN_LIMIT);
+
+        console.log("force reload found ids =", ids);
 
         if (ids.length > 0) {
             saveTicketIds(ids);
@@ -876,6 +888,7 @@ async function buyTicket() {
 
 // ==========================================
 // ✅ fallback 掃描最近票，不用 queryFilter
+// ✅ 修正：包含 ticketId = 0
 // ==========================================
 
 async function fallbackScanRecentTickets(limit = 100) {
@@ -892,6 +905,8 @@ async function fallbackScanRecentTickets(limit = 100) {
         const latest = nextId.toNumber() - 1;
         const start = Math.max(0, latest - limit + 1);
 
+        console.log("fallback scan latest =", latest, "start =", start);
+
         for (let batchEnd = latest; batchEnd >= start; batchEnd -= FALLBACK_BATCH_SIZE) {
             const batchStart = Math.max(start, batchEnd - FALLBACK_BATCH_SIZE + 1);
 
@@ -900,6 +915,8 @@ async function fallbackScanRecentTickets(limit = 100) {
             for (let id = batchEnd; id >= batchStart; id--) {
                 ids.push(id);
             }
+
+            console.log("scan ids:", ids);
 
             const packedList = await Promise.all(
                 ids.map(async id => {
@@ -918,10 +935,14 @@ async function fallbackScanRecentTickets(limit = 100) {
 
                 const owner = getOwnerFromPacked(item.packed);
 
+                console.log("ticket", item.id, "owner =", owner);
+
                 if (owner.toLowerCase() === userAddress.toLowerCase()) {
                     found.push(item.id);
                 }
             }
+
+            if (batchStart === 0) break;
         }
 
     } catch (e) {
