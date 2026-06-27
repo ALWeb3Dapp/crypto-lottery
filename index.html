@@ -157,6 +157,7 @@ let isLotteryExpired = false;
 
 let poolRefresher = null;
 let countdownTimer = null;
+let activeCountdownEndTime = 0;
 let vConsoleEnabled = false;
 
 const CACHE_PREFIX = "cryptoLottery_myTickets_";
@@ -289,7 +290,7 @@ async function initStaticData() {
         await updateLotteryPoolData();
 
         if (poolRefresher) clearInterval(poolRefresher);
-        poolRefresher = setInterval(updateLotteryPoolData, 8000);
+        poolRefresher = setInterval(updateLotteryPoolData, 15000);
 
     } catch (e) {
         console.error("靜態初始化失敗:", e);
@@ -376,7 +377,7 @@ async function connectWallet() {
         await updateLotteryPoolData();
         await loadMyTickets();
 
-        poolRefresher = setInterval(updateLotteryPoolData, 8000);
+        poolRefresher = setInterval(updateLotteryPoolData, 15000);
 
     } catch (error) {
         console.error("連線錢包時發生錯誤：", error);
@@ -685,43 +686,53 @@ function extractTicketIdsFromReceipt(receipt) {
 }
 
 // ==========================================
-// ✅ 更新獎池與倒數
+// ✅ 更新獎池與倒數：效能優化版
 // ==========================================
 
 async function updateLotteryPoolData() {
-    const contract = readContract || lotteryContract;
+    const contract = lotteryContract || readContract;
     if (!contract) return;
 
     try {
-        const currentRoundBN = await contract.currentRound();
+        const [currentRoundBN, endTime] = await Promise.all([
+            contract.currentRound(),
+            contract.endTime()
+        ]);
+
         const currentRound = currentRoundBN.toNumber();
 
-        const endTime = await contract.endTime();
-
-        const jackpot = await contract.jackpotPool(currentRound);
-        const tier2 = await contract.tier2Pool(currentRound);
-        const tier3 = await contract.tier3Pool(currentRound);
-        const special = await contract.specialPool(currentRound);
+        const [
+            jackpot,
+            tier2,
+            tier3,
+            special,
+            nextId
+        ] = await Promise.all([
+            contract.jackpotPool(currentRound),
+            contract.tier2Pool(currentRound),
+            contract.tier3Pool(currentRound),
+            contract.specialPool(currentRound),
+            contract.nextTicketId()
+        ]);
 
         const totalPool = jackpot.add(tier2).add(tier3);
 
         document.getElementById("totalPoolDisplay").innerText =
-            parseFloat(ethers.utils.formatEther(totalPool)).toFixed(4) + " BNB";
+            Number(ethers.utils.formatEther(totalPool)).toFixed(4) + " BNB";
 
         document.getElementById("specialPoolDisplay").innerText =
-            parseFloat(ethers.utils.formatEther(special)).toFixed(4) + " BNB";
+            Number(ethers.utils.formatEther(special)).toFixed(4) + " BNB";
 
         document.getElementById("roundDisplay").innerText =
             `當前期數：第 ${currentRound} 期`;
 
         try {
-            const nextId = await contract.nextTicketId();
-
             if (endTime.eq(0)) {
                 document.getElementById("lastTicketDisplay").innerText =
                     "當前最後彩票 ID：尚未啟動";
             } else if (nextId.gt(0)) {
                 const lastId = await contract.lastTicketId(currentRound);
+
                 document.getElementById("lastTicketDisplay").innerText =
                     `當前最後彩票 ID：${lastId.toString()}`;
             } else {
@@ -732,9 +743,14 @@ async function updateLotteryPoolData() {
             console.log("讀取最後彩票 ID 失敗:", e);
         }
 
-        if (countdownTimer) clearInterval(countdownTimer);
-
         if (endTime.eq(0)) {
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
+
+            activeCountdownEndTime = 0;
+
             document.getElementById("countdownDisplay").innerText =
                 "等待第一筆投注啟動倒數";
 
@@ -752,27 +768,38 @@ async function updateLotteryPoolData() {
             return;
         }
 
-        document.getElementById("countdownDisplay").className =
-            "fw-bold text-dark";
+        const endTimeSec = endTime.toNumber();
 
-        const endTimeMs = endTime.toNumber() * 1000;
+        if (activeCountdownEndTime !== endTimeSec) {
+            activeCountdownEndTime = endTimeSec;
 
-        countdownTimer = setInterval(() => {
-            const now = Date.now();
-            const distance = endTimeMs - now;
-
-            if (distance <= 0) {
-                document.getElementById("countdownDisplay").innerText =
-                    "本期已到期，等待 VRF 開獎與 Oracle 計算中！";
-
-                document.getElementById("buyTicketBtn").innerText =
-                    "本期已截止投注，請等待開獎";
-
-                document.getElementById("buyTicketBtn").disabled = true;
-                isLotteryExpired = true;
-
+            if (countdownTimer) {
                 clearInterval(countdownTimer);
-            } else {
+                countdownTimer = null;
+            }
+
+            document.getElementById("countdownDisplay").className =
+                "fw-bold text-dark";
+
+            countdownTimer = setInterval(() => {
+                const nowSec = Math.floor(Date.now() / 1000);
+                const distance = activeCountdownEndTime - nowSec;
+
+                if (distance <= 0) {
+                    document.getElementById("countdownDisplay").innerText =
+                        "本期已到期，等待 VRF 開獎與 Oracle 計算中！";
+
+                    document.getElementById("buyTicketBtn").innerText =
+                        "本期已截止投注，請等待開獎";
+
+                    document.getElementById("buyTicketBtn").disabled = true;
+                    isLotteryExpired = true;
+
+                    clearInterval(countdownTimer);
+                    countdownTimer = null;
+                    return;
+                }
+
                 isLotteryExpired = false;
 
                 document.getElementById("buyTicketBtn").innerText =
@@ -781,15 +808,15 @@ async function updateLotteryPoolData() {
                 document.getElementById("buyTicketBtn").disabled =
                     selectedNumbers.length !== 6;
 
-                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                const days = Math.floor(distance / 86400);
+                const hours = Math.floor((distance % 86400) / 3600);
+                const minutes = Math.floor((distance % 3600) / 60);
+                const seconds = distance % 60;
 
                 document.getElementById("countdownDisplay").innerText =
                     `${days}天 ${hours}小時 ${minutes}分 ${seconds}秒`;
-            }
-        }, 1000);
+            }, 1000);
+        }
 
     } catch (e) {
         console.error("刷新鏈上即時獎池失敗：", e);
