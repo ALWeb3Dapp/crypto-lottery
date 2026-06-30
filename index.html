@@ -78,34 +78,6 @@
                         🎲 電腦自動選號
                     </button>
                 </div>
-
-                <div class="border rounded p-3 mb-3 bg-light">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="fw-bold text-secondary">🧾 多張購票清單</span>
-                    <button class="btn btn-outline-danger btn-sm fw-bold" onclick="clearTicketBatch()">
-                        清空
-                    </button>
-                </div>
-
-                <button class="btn btn-outline-primary btn-sm w-100 fw-bold mb-2" onclick="addCurrentSelectionToBatch()">
-                    ➕ 將目前選號加入購票清單
-                </button>
-
-                <div class="input-group input-group-sm mb-2">
-                    <span class="input-group-text">隨機張數</span>
-                    <input type="number" id="randomTicketCountInput" class="form-control" min="1" max="30" value="5">
-                    <button class="btn btn-outline-success fw-bold" onclick="addRandomTicketsToBatch()">
-                        🎲 加入隨機票
-                    </button>
-                </div>
-
-                <div id="batchTicketSummary" class="small text-muted mb-2">
-                    目前購票清單：0 張
-                </div>
-
-                <div id="batchTicketList" class="small"></div>
-                </div>
-
                 <button class="btn btn-success btn-lg w-100 fw-bold shadow-sm" id="buyTicketBtn" onclick="buyTicket()" disabled>
                     確認投注 (需支付 0.005 BNB)
                 </button>
