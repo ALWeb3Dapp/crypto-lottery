@@ -1,1358 +1,411 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alan Crypto Lottery - 大樂透投注與領獎系統</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" type="text/javascript"></script>
-    
-
-    <style>
-        body { background-color: #f8f9fa; font-family: "Microsoft JhengHei", sans-serif; }
-        .lottery-container { max-width: 800px; margin: 30px auto; }
-        .pool-card { background: linear-gradient(135deg, #198754, #157347); color: white; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; height: 100%; }
-        .fomo-card { background: linear-gradient(135deg, #dc3545, #bb2d3b); color: white; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; height: 100%; }
-        .number-btn { width: 45px; height: 45px; margin: 4px; border-radius: 50%; font-weight: bold; font-size: 0.95rem; }
-        .ticket-card { border-left: 5px solid #0d6efd; margin-bottom: 15px; }
-        .nav-tabs .nav-link { color: #495057; font-weight: bold; }
-        .nav-tabs .nav-link.active { color: #198754 !important; border-bottom: 3px solid #198754; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alan Crypto Lottery - 大樂透投注與領獎系統</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" type="text/javascript"></script>
+  <style>
+    body { background-color: #f8f9fa; font-family: "Microsoft JhengHei", sans-serif; }
+    .lottery-container { max-width: 800px; margin: 30px auto; }
+    .pool-card { background: linear-gradient(135deg, #198754, #157347); color: white; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+    .fomo-card { background: linear-gradient(135deg, #dc3545, #bb2d3b); color: white; border-radius: 15px; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+    .number-btn { width: 45px; height: 45px; margin: 4px; border-radius: 50%; font-weight: bold; font-size: 0.95rem; }
+    .ticket-card { border-left: 5px solid #0d6efd; margin-bottom: 15px; }
+    .nav-tabs .nav-link { color: #495057; font-weight: bold; }
+    .nav-tabs .nav-link.active { color: #198754 !important; border-bottom: 3px solid #198754; }
+    .ticket-card-inner { gap: 12px; }
+    .ticket-status-wrap { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; text-align: right; }
+    .ticket-status-wrap .badge { white-space: normal; line-height: 1.35; display: inline-block; max-width: 100%; }
+    .ticket-number-text { overflow-wrap: anywhere; word-break: break-word; }
+    .batch-ticket-row { gap: 8px; }
+    .batch-ticket-numbers { overflow-wrap: anywhere; word-break: break-word; }
+    @media (max-width: 576px) {
+      .ticket-card-inner { flex-direction: column !important; align-items: flex-start !important; }
+      .ticket-status-wrap { width: 100%; text-align: left; }
+      .ticket-status-wrap .badge { width: 100%; text-align: left; font-size: 0.9rem !important; }
+      .ticket-card .btn { width: 100%; }
+      .batch-ticket-row { align-items: flex-start !important; }
+      .batch-ticket-row button { min-width: 58px; }
+    }
+  </style>
 </head>
 <body>
-
 <div class="container lottery-container">
-    
-    <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm">
-        <h2 class="fw-bold mb-0 text-dark">🔮 Crypto Lottery</h2>
-        <button id="connectWalletBtn" class="btn btn-success fw-bold" onclick="connectWallet()">連結 MetaMask 錢包</button>
-    </div>
-    <div id="walletAddressDisplay" class="alert alert-secondary text-center d-none" style="word-break: break-all;"></div>
+  <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded shadow-sm">
+    <h2 class="fw-bold mb-0 text-dark">🔮 Crypto Lottery</h2>
+    <button id="connectWalletBtn" class="btn btn-success fw-bold" onclick="connectWallet()">連結 MetaMask 錢包</button>
+  </div>
+  <div id="walletAddressDisplay" class="alert alert-secondary text-center d-none" style="word-break: break-all;"></div>
 
-    <ul class="nav nav-tabs mb-4" id="lotteryTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active fs-5" id="buy-tab" data-bs-toggle="tab" data-bs-target="#buy-content" type="button" role="tab">🎟️ 購買彩券</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link fs-5" id="claim-tab" data-bs-toggle="tab" data-bs-target="#claim-content" type="button" role="tab" onclick="loadMyTickets()">💰 我的彩券與領獎</button>
-        </li>
-    </ul>
+  <ul class="nav nav-tabs mb-4" id="lotteryTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active fs-5" id="buy-tab" data-bs-toggle="tab" data-bs-target="#buy-content" type="button" role="tab">🎟️ 購買彩券</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link fs-5" id="claim-tab" data-bs-toggle="tab" data-bs-target="#claim-content" type="button" role="tab" onclick="loadMyTickets()">💰 我的彩券與領獎</button>
+    </li>
+  </ul>
 
-    <div class="tab-content" id="lotteryTabsContent">
-        
-        <div class="tab-pane fade show active" id="buy-content" role="tablist">
-            
-            <div class="row g-3 mb-4 match-height">
-                <div class="col-md-6">
-                    <div class="card pool-card shadow border-0 p-4 text-center h-100">
-                        <h5 class="text-white-50">🏆 本期總獎池 (頭獎+2獎+3獎)</h5>
-                        <h2 class="fw-bold" id="totalPoolDisplay">0.0000 BNB</h2>
-                        <small id="roundDisplay" class="text-white-50">當前期數：第 -- 期</small>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card fomo-card shadow border-0 p-4 text-center h-100">
-                        <h5 class="text-white-50">🔥 FOMO 特別獎池 (最後一注獨得)</h5>
-                        <h2 class="fw-bold" id="specialPoolDisplay">0.0000 BNB</h2>
-                        <small id="lastTicketDisplay" class="text-white-50">當前最後彩票 ID：--</small>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card mb-4 shadow-sm border-0 text-center p-3">
-                <h5 class="fw-bold text-danger">⏳ 距離本期開獎截止倒數</h5>
-                <h3 id="countdownDisplay" class="fw-bold text-dark">--天 --小時 --分 --秒</h3>
-                <small class="text-muted">💡 末日加速賽制：剩下 ≤24小時買票加10分鐘(上限24h)；剩下 ≤1小時買票加5分鐘(上限1h)！</small>
-            </div>
-
-            <div class="card p-4 shadow-sm border-0 mb-4">
-                <h4 class="fw-bold mb-3 text-secondary text-center">請選擇 6 個不重複號碼 (1 ~ 49)</h4>
-                <div class="text-center mb-4" id="numberGrid"></div>
-                
-                <div class="alert alert-info text-center fs-5 mb-3">
-                    已選擇號碼：<strong id="selectedNumbersDisplay" class="text-success">尚未選擇</strong>
-                </div>
-
-                <div class="mb-3">
-                    <button class="btn btn-outline-success btn-md w-100 fw-bold" onclick="autoSelectNumbers()">
-                        🎲 電腦自動選號
-                    </button>
-                </div>
-                <button class="btn btn-success btn-lg w-100 fw-bold shadow-sm" id="buyTicketBtn" onclick="buyTicket()" disabled>
-                    確認投注 (需支付 0.005 BNB)
-                </button>
-            </div>
+  <div class="tab-content" id="lotteryTabsContent">
+    <div class="tab-pane fade show active" id="buy-content" role="tablist">
+      <div class="row g-3 mb-4 match-height">
+        <div class="col-md-6">
+          <div class="card pool-card shadow border-0 p-4 text-center h-100">
+            <h5 class="text-white-50">🏆 本期總獎池 (頭獎+2獎+3獎)</h5>
+            <h2 class="fw-bold" id="totalPoolDisplay">0.0000 BNB</h2>
+            <small id="roundDisplay" class="text-white-50">當前期數：第 -- 期</small>
+          </div>
         </div>
-
-        <div class="tab-pane fade" id="claim-content" role="tablist">
-            <div class="card p-4 shadow-sm border-0">
-                <h4 class="fw-bold mb-3 text-dark">🎁 歷史彩券對獎與獎金提領專區</h4>
-                <p class="text-muted">請注意：當期開獎後，若您的彩券幸運中獎或符合特別獎，可在此直接一鍵點擊「提領獎金」！</p>
-                
-                <div id="loadingTickets" class="text-center my-4 d-none">
-                    <div class="spinner-border text-success" role="status"></div>
-                    <p class="mt-2 text-muted">正在讀您所有的鏈上彩券...</p>
-                </div>
-
-                <div id="myTicketsList">
-                    <div class="text-center py-5 text-muted">
-                        請先連結錢包，或您目前在測試網尚無購買這套樂透的紀錄。
-                    </div>
-                </div>
-            </div>
+        <div class="col-md-6">
+          <div class="card fomo-card shadow border-0 p-4 text-center h-100">
+            <h5 class="text-white-50">🔥 FOMO 特別獎池 (最後一注獨得)</h5>
+            <h2 class="fw-bold" id="specialPoolDisplay">0.0000 BNB</h2>
+            <small id="lastTicketDisplay" class="text-white-50">當前最後彩票 ID：--</small>
+          </div>
         </div>
+      </div>
 
+      <div class="card mb-4 shadow-sm border-0 text-center p-3">
+        <h5 class="fw-bold text-danger">⏳ 距離本期開獎截止倒數</h5>
+        <h3 id="countdownDisplay" class="fw-bold text-dark">--天 --小時 --分 --秒</h3>
+        <small class="text-muted">💡 末日加速賽制：剩下 ≤24小時買票加10分鐘(上限24h)；剩下 ≤1小時買票加5分鐘(上限1h)！</small>
+      </div>
+
+      <div class="card p-4 shadow-sm border-0 mb-4">
+        <h4 class="fw-bold mb-3 text-secondary text-center">請選擇 6 個不重複號碼 (1 ~ 49)</h4>
+        <div class="text-center mb-4" id="numberGrid"></div>
+        <div class="alert alert-info text-center fs-5 mb-3">已選擇號碼：<strong id="selectedNumbersDisplay" class="text-success">尚未選擇</strong></div>
+        <div class="mb-3"><button class="btn btn-outline-success btn-md w-100 fw-bold" onclick="autoSelectNumbers()">🎲 電腦自動選號</button></div>
+        <button class="btn btn-success btn-lg w-100 fw-bold shadow-sm" id="buyTicketBtn" onclick="buyTicket()" disabled>確認投注 (需支付 0.005 BNB)</button>
+      </div>
     </div>
+
+    <div class="tab-pane fade" id="claim-content" role="tablist">
+      <div class="card p-4 shadow-sm border-0">
+        <h4 class="fw-bold mb-3 text-dark">🎁 歷史彩券對獎與獎金提領專區</h4>
+        <p class="text-muted">請注意：當期開獎後，若您的彩券幸運中獎或符合特別獎，可在此直接一鍵點擊「提領獎金」！</p>
+        <div id="loadingTickets" class="text-center my-4 d-none"><div class="spinner-border text-success" role="status"></div><p class="mt-2 text-muted">正在讀您所有的鏈上彩券...</p></div>
+        <div id="myTicketsList"><div class="text-center py-5 text-muted">請先連結錢包，或您目前在測試網尚無購買這套樂透的紀錄。</div></div>
+      </div>
+    </div>
+  </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-// crypto-lottery-frontend-vnext-batch.js
-// CryptoLottery Frontend JS - vNext + 多張購票清單
-// Features:
-// - 新版合約地址 0x61C55A2236f15D443f1acC88eed6d9f071043ddE
-// - 單張購票維持原本行為
-// - 多張購票清單：手動加入目前選號、隨機加入 N 張、一次 buy(masks)
-// - 前端限制單次最多 30 張，避免交易 Gas 過高
-// - 我的彩券維持方案 A：localStorage + 讀取鏈上票券按鈕
-// - fallback 掃票只掃 currentRound 與 currentRound - 1
-// - 切換頁籤不重抓票，獎池與倒數持續更新
-// - 手機版彩券卡片 RWD 修正
-
 const LOTTERY_CONTRACT_ADDRESS = "0x61C55A2236f15D443f1acC88eed6d9f071043ddE";
 const BSC_TESTNET_RPC_URL = "https://bsc-testnet-rpc.publicnode.com";
-
+const API_BASE_URL = "https://lottery-oracle-bot-production.up.railway.app";
 const BSC_TESTNET_CHAIN_ID_DEC = 97;
 const BSC_TESTNET_CHAIN_ID_HEX = "0x61";
-
-const CONTRACT_ABI = [
-    "function currentRound() view returns (uint256)",
-    "function endTime() view returns (uint256)",
-    "function nextTicketId() view returns (uint256)",
-    "function jackpotPool(uint256 round) view returns (uint256)",
-    "function tier2Pool(uint256 round) view returns (uint256)",
-    "function tier3Pool(uint256 round) view returns (uint256)",
-    "function specialPool(uint256 round) view returns (uint256)",
-    "function lastTicketId(uint256 round) view returns (uint256)",
-    "function winningMask(uint256 round) view returns (uint256)",
-    "function drawn(uint256 round) view returns (bool)",
-    "function drawTime(uint256 round) view returns (uint256)",
-    "function claimDuration() view returns (uint256)",
-    "function winners(uint256 round) view returns (uint256 j, uint256 t2, uint256 t3, bool set)",
-    "function devAccum() view returns (uint256)",
-    "function devFeeBps() view returns (uint256)",
-    "function buy(uint256[] masks) payable",
-    "function claimBatch(uint256[] ids)",
-    "function tickets(uint256 ticketId) view returns (uint256)",
-    "event TicketBought(address indexed user, uint256 indexed ticketId, uint256 indexed round, uint256 mask)"
-];
-
-let provider;
-let signer;
-let lotteryContract;
-let readProvider;
-let readContract;
-let userAddress = "";
-let selectedNumbers = [];
-let isLotteryExpired = false;
-let poolRefresher = null;
-let countdownTimer = null;
-let activeCountdownEndTime = 0;
-let vConsoleEnabled = false;
-let ticketsLoading = false;
-let ticketsRenderSeq = 0;
-let ticketsLoadedOnce = false;
-let lastRenderedTicketSig = "";
-
-// 多張購票清單
-let batchTickets = [];
-
+const MAX_TICKETS_PER_BUY = 30;
+const TICKET_PRICE_BNB = "0.005";
 const CACHE_PREFIX = "cryptoLottery_myTickets_";
 const FALLBACK_SCAN_LIMIT = 1000;
 const FALLBACK_BATCH_SIZE = 25;
 const POOL_REFRESH_MS = 15000;
-const MAX_TICKETS_PER_BUY = 30;
-const TICKET_PRICE_BNB = "0.005";
-
-// ==========================================
-// vConsole：只在 BSC Testnet 顯示
-// ==========================================
-
-async function enableVConsoleOnlyOnTestnet() {
-    try {
-        if (!window.ethereum) return;
-        const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
-        const network = await tempProvider.getNetwork();
-        if (network.chainId !== BSC_TESTNET_CHAIN_ID_DEC) return;
-        if (vConsoleEnabled) return;
-
-        await loadScriptOnce("https://unpkg.com/vconsole@latest/dist/vconsole.min.js");
-
-        if (window.VConsole) {
-            window.vConsole = new window.VConsole();
-            vConsoleEnabled = true;
-            console.log("vConsole enabled on BSC Testnet");
-        }
-    } catch (error) {
-        console.warn("vConsole init skipped:", error);
-    }
-}
-
-function loadScriptOnce(src) {
-    return new Promise((resolve, reject) => {
-        const exists = Array.from(document.scripts).some(script => script.src === src);
-        if (exists) {
-            resolve();
-            return;
-        }
-
-        const script = document.createElement("script");
-        script.src = src;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-}
-
-// ==========================================
-// 基礎工具
-// ==========================================
-
-function validateContractAddress() {
-    const ok = ethers.utils.isAddress(LOTTERY_CONTRACT_ADDRESS);
-    console.log("LOTTERY_CONTRACT_ADDRESS =", LOTTERY_CONTRACT_ADDRESS);
-    console.log("isAddress =", ok);
-
-    if (!ok) {
-        alert("Lottery 合約地址格式錯誤，請確認 LOTTERY_CONTRACT_ADDRESS 是完整 0x 開頭地址。");
-        throw new Error("Invalid LOTTERY_CONTRACT_ADDRESS");
-    }
-}
-
-function getCacheKey(address) {
-    return `${CACHE_PREFIX}${LOTTERY_CONTRACT_ADDRESS.toLowerCase()}_${address.toLowerCase()}`;
-}
-
-function getTicketIdsSignature(ids) {
-    return [...new Set(
-        ids
-            .map(value => Number(value))
-            .filter(value => Number.isInteger(value) && value >= 0)
-    )]
-        .sort((a, b) => b - a)
-        .join(",");
-}
-
-function resetTicketUiCacheState() {
-    ticketsLoadedOnce = false;
-    lastRenderedTicketSig = "";
-    ticketsRenderSeq++;
-}
-
-function formatBNBAmountFromTicketCount(count) {
-    const total = Number(TICKET_PRICE_BNB) * count;
-    return total.toFixed(3).replace(/\.000$/, ".000");
-}
-
-// ==========================================
-// 初始化
-// ==========================================
+const CONTRACT_ABI = [
+  "function currentRound() view returns (uint256)",
+  "function endTime() view returns (uint256)",
+  "function nextTicketId() view returns (uint256)",
+  "function jackpotPool(uint256 round) view returns (uint256)",
+  "function tier2Pool(uint256 round) view returns (uint256)",
+  "function tier3Pool(uint256 round) view returns (uint256)",
+  "function specialPool(uint256 round) view returns (uint256)",
+  "function lastTicketId(uint256 round) view returns (uint256)",
+  "function winningMask(uint256 round) view returns (uint256)",
+  "function drawn(uint256 round) view returns (bool)",
+  "function drawTime(uint256 round) view returns (uint256)",
+  "function claimDuration() view returns (uint256)",
+  "function winners(uint256 round) view returns (uint256 j, uint256 t2, uint256 t3, bool set)",
+  "function buy(uint256[] masks) payable",
+  "function claimBatch(uint256[] ids)",
+  "function tickets(uint256 ticketId) view returns (uint256)",
+  "event TicketBought(address indexed user, uint256 indexed ticketId, uint256 indexed round, uint256 mask)"
+];
+let provider, signer, lotteryContract, readProvider, readContract, userAddress = "";
+let selectedNumbers = [], batchTickets = [];
+let isLotteryExpired = false, poolRefresher = null, countdownTimer = null, activeCountdownEndTime = 0;
+let ticketsLoading = false, ticketsLoadedOnce = false, lastRenderedTicketSig = "";
+let vConsoleEnabled = false;
 
 window.addEventListener("load", async () => {
-    validateContractAddress();
-    initNumberGrid();
-    injectReloadTicketsButton();
-    injectBatchTicketPanel();
-    injectMobileTicketStyle();
-    renderBatchTickets();
-    await enableVConsoleOnlyOnTestnet();
-    await initStaticData();
+  validateContractAddress();
+  initNumberGrid();
+  injectReloadTicketsButton();
+  injectBatchTicketPanel();
+  renderBatchTickets();
+  await enableVConsoleOnlyOnTestnet();
+  await initStaticData();
 });
-
 if (window.ethereum) {
-    window.ethereum.on("chainChanged", () => {
-        window.location.reload();
-    });
+  window.ethereum.on("chainChanged", () => window.location.reload());
+  window.ethereum.on("accountsChanged", () => window.location.reload());
+}
+function validateContractAddress(){ if(!ethers.utils.isAddress(LOTTERY_CONTRACT_ADDRESS)) throw new Error("Invalid LOTTERY_CONTRACT_ADDRESS"); }
+function getCacheKey(address){ return `${CACHE_PREFIX}${LOTTERY_CONTRACT_ADDRESS.toLowerCase()}_${address.toLowerCase()}`; }
+function getTicketIdsSignature(ids){ return [...new Set(ids.map(Number).filter(n=>Number.isInteger(n)&&n>=0))].sort((a,b)=>b-a).join(","); }
+function resetTicketUiCacheState(){ ticketsLoadedOnce=false; lastRenderedTicketSig=""; }
+function formatBNBAmountFromTicketCount(count){ return (Number(TICKET_PRICE_BNB)*count).toFixed(3).replace(/\.000$/, ".000"); }
 
-    window.ethereum.on("accountsChanged", () => {
-        window.location.reload();
-    });
+async function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const exists = Array.from(document.scripts).some(script => script.src === src);
+    if (exists) { resolve(); return; }
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
 }
 
-function initNumberGrid() {
-    const grid = document.getElementById("numberGrid");
-    if (!grid) return;
+async function enableVConsoleOnlyOnTestnet() {
+  try {
+    if (!window.ethereum) return;
+    if (vConsoleEnabled) return;
 
-    grid.innerHTML = "";
+    const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
+    const network = await tempProvider.getNetwork();
+    if (network.chainId !== BSC_TESTNET_CHAIN_ID_DEC) return;
 
-    for (let i = 1; i <= 49; i++) {
-        const btn = document.createElement("button");
-        btn.innerText = i;
-        btn.id = `num-btn-${i}`;
-        btn.className = "btn btn-outline-secondary number-btn";
-        btn.onclick = () => selectNumber(i, btn);
-        grid.appendChild(btn);
+    await loadScriptOnce("https://unpkg.com/vconsole@latest/dist/vconsole.min.js");
+    if (window.VConsole) {
+      window.vConsole = new window.VConsole();
+      vConsoleEnabled = true;
+      console.log("vConsole enabled on BSC Testnet only");
     }
+  } catch (error) {
+    console.warn("vConsole init skipped:", error);
+  }
 }
 
-function injectMobileTicketStyle() {
-    if (document.getElementById("ticket-mobile-style")) return;
-
-    const style = document.createElement("style");
-    style.id = "ticket-mobile-style";
-    style.innerHTML = `
-        .ticket-card-inner { gap: 12px; }
-        .ticket-status-wrap { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; text-align: right; }
-        .ticket-status-wrap .badge { white-space: normal; line-height: 1.35; display: inline-block; max-width: 100%; }
-        .ticket-number-text { overflow-wrap: anywhere; word-break: break-word; }
-        .batch-ticket-row { gap: 8px; }
-        .batch-ticket-numbers { overflow-wrap: anywhere; word-break: break-word; }
-        @media (max-width: 576px) {
-            .ticket-card-inner { flex-direction: column !important; align-items: flex-start !important; }
-            .ticket-status-wrap { width: 100%; text-align: left; }
-            .ticket-status-wrap .badge { width: 100%; text-align: left; font-size: 0.9rem !important; }
-            .ticket-card .btn { width: 100%; }
-            .batch-ticket-row { align-items: flex-start !important; }
-            .batch-ticket-row button { min-width: 58px; }
-        }
-    `;
-    document.head.appendChild(style);
+async function initStaticData(){
+  try{
+    readProvider = new ethers.providers.JsonRpcProvider(BSC_TESTNET_RPC_URL);
+    readContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, readProvider);
+    if(window.ethereum) provider = new ethers.providers.Web3Provider(window.ethereum);
+    lotteryContract = readContract;
+    await updateLotteryPoolData();
+    if(poolRefresher) clearInterval(poolRefresher);
+    poolRefresher=setInterval(updateLotteryPoolData, POOL_REFRESH_MS);
+  }catch(e){ console.error("靜態初始化失敗:", e); }
 }
-
-async function initStaticData() {
-    try {
-        validateContractAddress();
-        readProvider = new ethers.providers.JsonRpcProvider(BSC_TESTNET_RPC_URL);
-        readContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, readProvider);
-
-        if (window.ethereum) {
-            provider = new ethers.providers.Web3Provider(window.ethereum);
-        }
-
-        lotteryContract = readContract;
-        await updateLotteryPoolData();
-
-        if (poolRefresher) clearInterval(poolRefresher);
-        poolRefresher = setInterval(updateLotteryPoolData, POOL_REFRESH_MS);
-    } catch (error) {
-        console.error("靜態初始化失敗:", error);
-    }
+async function _forceEnsureBSCTestnet(web3Provider){
+  const { chainId } = await web3Provider.getNetwork();
+  if(chainId !== BSC_TESTNET_CHAIN_ID_DEC){
+    try{ await window.ethereum.request({method:"wallet_switchEthereumChain", params:[{chainId:BSC_TESTNET_CHAIN_ID_HEX}]}); provider=new ethers.providers.Web3Provider(window.ethereum); return true; }
+    catch(e){ alert("請先將錢包網路切換至 BSC 測試網！"); return false; }
+  }
+  return true;
 }
-
-async function _forceEnsureBSCTestnet(web3Provider) {
-    const { chainId } = await web3Provider.getNetwork();
-
-    if (chainId !== BSC_TESTNET_CHAIN_ID_DEC) {
-        try {
-            await window.ethereum.request({
-                method: "wallet_switchEthereumChain",
-                params: [{ chainId: BSC_TESTNET_CHAIN_ID_HEX }]
-            });
-            provider = new ethers.providers.Web3Provider(window.ethereum);
-            return true;
-        } catch (switchError) {
-            console.error("切換 BSC Testnet 失敗:", switchError);
-            alert("請先將錢包網路切換至 BSC 測試網！");
-            return false;
-        }
-    }
-
-    return true;
+async function connectWallet(){
+  if(!window.ethereum){ alert("請先安裝 MetaMask 錢包外掛！"); return; }
+  try{
+    if(poolRefresher) clearInterval(poolRefresher);
+    const wp = new ethers.providers.Web3Provider(window.ethereum);
+    if(!(await _forceEnsureBSCTestnet(wp))) return;
+    await wp.send("eth_requestAccounts", []);
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    signer = provider.getSigner();
+    userAddress = await signer.getAddress();
+    lotteryContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+    readProvider = new ethers.providers.JsonRpcProvider(BSC_TESTNET_RPC_URL);
+    readContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, readProvider);
+    await enableVConsoleOnlyOnTestnet();
+    document.getElementById("connectWalletBtn").innerText="已連結";
+    const display=document.getElementById("walletAddressDisplay"); display.innerText=`目前帳號：${userAddress}`; display.classList.remove("d-none");
+    updateReloadTicketButtonText();
+    await updateLotteryPoolData(); await loadMyTickets();
+    poolRefresher=setInterval(updateLotteryPoolData, POOL_REFRESH_MS);
+  }catch(e){ console.error(e); alert("連線錢包失敗，請查看 Console。"); }
 }
-
-// ==========================================
-// 連結錢包
-// ==========================================
-
-async function connectWallet() {
-    if (!window.ethereum) {
-        alert("請先安裝 MetaMask 錢包外掛！");
-        return;
-    }
-
-    try {
-        validateContractAddress();
-
-        if (poolRefresher) clearInterval(poolRefresher);
-
-        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-        const isCorrectNet = await _forceEnsureBSCTestnet(web3Provider);
-        if (!isCorrectNet) return;
-
-        await web3Provider.send("eth_requestAccounts", []);
-
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        signer = provider.getSigner();
-        userAddress = await signer.getAddress();
-
-        lotteryContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-        readProvider = new ethers.providers.JsonRpcProvider(BSC_TESTNET_RPC_URL);
-        readContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, readProvider);
-
-        await enableVConsoleOnlyOnTestnet();
-
-        document.getElementById("connectWalletBtn").innerText = "已連結";
-        document.getElementById("connectWalletBtn").className = "btn btn-success fw-bold";
-
-        const display = document.getElementById("walletAddressDisplay");
-        display.innerText = `目前帳號：${userAddress}`;
-        display.classList.remove("d-none");
-
-        updateReloadTicketButtonText();
-        await updateLotteryPoolData();
-        await loadMyTickets();
-
-        poolRefresher = setInterval(updateLotteryPoolData, POOL_REFRESH_MS);
-    } catch (error) {
-        console.error("連線錢包時發生錯誤：", error);
-        alert("連線錢包失敗，請查看 vConsole 或瀏覽器 Console。");
-    }
+function initNumberGrid(){
+  const grid=document.getElementById("numberGrid"); if(!grid) return; grid.innerHTML="";
+  for(let i=1;i<=49;i++){ const btn=document.createElement("button"); btn.innerText=i; btn.id=`num-btn-${i}`; btn.className="btn btn-outline-secondary number-btn"; btn.onclick=()=>selectNumber(i,btn); grid.appendChild(btn); }
 }
-
-// ==========================================
-// 號碼選擇
-// ==========================================
-
-function selectNumber(num, btn) {
-    if (selectedNumbers.includes(num)) {
-        selectedNumbers = selectedNumbers.filter(n => n !== num);
-        btn.classList.remove("btn-success", "text-white");
-        btn.classList.add("btn-outline-secondary");
-    } else {
-        if (selectedNumbers.length >= 6) {
-            alert("每張彩券只能選擇 6 個號碼！");
-            return;
-        }
-
-        selectedNumbers.push(num);
-        btn.classList.remove("btn-outline-secondary");
-        btn.classList.add("btn-success", "text-white");
-    }
-
-    selectedNumbers.sort((a, b) => a - b);
-    updateSelectedDisplay();
+function selectNumber(num,btn){
+  if(selectedNumbers.includes(num)){ selectedNumbers=selectedNumbers.filter(n=>n!==num); btn.classList.remove("btn-success","text-white"); btn.classList.add("btn-outline-secondary"); }
+  else{ if(selectedNumbers.length>=6){ alert("每張彩券只能選擇 6 個號碼！"); return; } selectedNumbers.push(num); btn.classList.remove("btn-outline-secondary"); btn.classList.add("btn-success","text-white"); }
+  selectedNumbers.sort((a,b)=>a-b); updateSelectedDisplay();
 }
-
-function autoSelectNumbers() {
-    selectedNumbers = [];
-
-    const btns = document.querySelectorAll(".number-btn");
-    btns.forEach(btn => {
-        btn.classList.remove("btn-success", "text-white");
-        btn.classList.add("btn-outline-secondary");
-    });
-
-    selectedNumbers = generateRandomNumbers();
-
-    selectedNumbers.forEach(num => {
-        const btn = document.getElementById(`num-btn-${num}`);
-        if (btn) {
-            btn.classList.remove("btn-outline-secondary");
-            btn.classList.add("btn-success", "text-white");
-        }
-    });
-
-    updateSelectedDisplay();
+function generateRandomNumbers(){ const nums=[]; while(nums.length<6){ const n=Math.floor(Math.random()*49)+1; if(!nums.includes(n)) nums.push(n);} return nums.sort((a,b)=>a-b); }
+function autoSelectNumbers(){ selectedNumbers=[]; document.querySelectorAll(".number-btn").forEach(btn=>{btn.classList.remove("btn-success","text-white");btn.classList.add("btn-outline-secondary");}); selectedNumbers=generateRandomNumbers(); selectedNumbers.forEach(n=>{const btn=document.getElementById(`num-btn-${n}`); if(btn){btn.classList.remove("btn-outline-secondary");btn.classList.add("btn-success","text-white");}}); updateSelectedDisplay(); }
+function updateSelectedDisplay(){ const d=document.getElementById("selectedNumbersDisplay"); if(d)d.innerText=selectedNumbers.length?selectedNumbers.join(", "):"尚未選擇"; updateBuyButtonState(); }
+function updateBuyButtonState(){
+  const b=document.getElementById("buyTicketBtn"); if(!b) return; const count=getPurchaseMasks().length;
+  if(isLotteryExpired){ b.disabled=true; b.innerText="本期已截止投注，請等待開獎"; return; }
+  b.disabled=count===0; b.innerText=count>1?`確認投注 ${count} 張 (需支付 ${formatBNBAmountFromTicketCount(count)} BNB)`:"確認投注 (需支付 0.005 BNB)";
 }
-
-function updateSelectedDisplay() {
-    const display = document.getElementById("selectedNumbersDisplay");
-    if (display) {
-        display.innerText = selectedNumbers.length > 0 ? selectedNumbers.join(", ") : "尚未選擇";
-    }
-
-    updateBuyButtonState();
+function injectBatchTicketPanel(){
+  if(document.getElementById("batchTicketPanel")) return; const buyBtn=document.getElementById("buyTicketBtn"); if(!buyBtn||!buyBtn.parentNode)return;
+  const panel=document.createElement("div"); panel.id="batchTicketPanel"; panel.className="border rounded p-3 mb-3 bg-light";
+  panel.innerHTML=`<div class="d-flex justify-content-between align-items-center mb-2"><span class="fw-bold text-secondary">🧾 多張購票清單</span><button type="button" class="btn btn-outline-danger btn-sm fw-bold" onclick="clearTicketBatch()">清空</button></div><button type="button" class="btn btn-outline-primary btn-sm w-100 fw-bold mb-2" onclick="addCurrentSelectionToBatch()">➕ 將目前選號加入購票清單</button><div class="input-group input-group-sm mb-2"><span class="input-group-text">隨機張數</span><input type="number" id="randomTicketCountInput" class="form-control" min="1" max="${MAX_TICKETS_PER_BUY}" value="5"><button type="button" class="btn btn-outline-success fw-bold" onclick="addRandomTicketsToBatch()">🎲 加入隨機票</button></div><div id="batchTicketSummary" class="small text-muted mb-1">目前購票清單：0 張</div><div class="small text-muted mb-2">💡 單次最多 30 張，可分批購買。</div><div id="batchTicketList" class="small"></div>`;
+  buyBtn.parentNode.insertBefore(panel,buyBtn);
 }
-
-function updateBuyButtonState() {
-    const buyBtn = document.getElementById("buyTicketBtn");
-    if (!buyBtn) return;
-
-    const masks = getPurchaseMasks();
-    const count = masks.length;
-
-    if (isLotteryExpired) {
-        buyBtn.disabled = true;
-        buyBtn.innerText = "本期已截止投注，請等待開獎";
-        return;
-    }
-
-    buyBtn.disabled = count === 0;
-
-    if (count > 1) {
-        buyBtn.innerText = `確認投注 ${count} 張 (需支付 ${formatBNBAmountFromTicketCount(count)} BNB)`;
-    } else {
-        buyBtn.innerText = "確認投注 (需支付 0.005 BNB)";
-    }
+function numbersToKey(numbers){return numbers.slice().sort((a,b)=>a-b).join(",");}
+function addCurrentSelectionToBatch(){
+  if(selectedNumbers.length!==6){alert("請先選擇 6 個號碼！");return;} if(batchTickets.length>=MAX_TICKETS_PER_BUY){alert(`單次最多只能購買 ${MAX_TICKETS_PER_BUY} 張。`);return;}
+  const nums=selectedNumbers.slice().sort((a,b)=>a-b); const key=numbersToKey(nums); if(batchTickets.some(t=>numbersToKey(t.numbers)===key)){alert("這組號碼已經在購票清單中。");return;}
+  batchTickets.push({numbers:nums, mask:encodeMask(nums)}); renderBatchTickets(); updateSelectedDisplay();
 }
-
-// ==========================================
-// 多張購票清單
-// ==========================================
-
-function injectBatchTicketPanel() {
-    if (document.getElementById("batchTicketPanel")) return;
-
-    const buyBtn = document.getElementById("buyTicketBtn");
-    if (!buyBtn || !buyBtn.parentNode) return;
-
-    const panel = document.createElement("div");
-    panel.id = "batchTicketPanel";
-    panel.className = "border rounded p-3 mb-3 bg-light";
-    panel.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="fw-bold text-secondary">🧾 多張購票清單</span>
-            <button type="button" class="btn btn-outline-danger btn-sm fw-bold" onclick="clearTicketBatch()">
-                清空
-            </button>
-        </div>
-
-        <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-bold mb-2" onclick="addCurrentSelectionToBatch()">
-            ➕ 將目前選號加入購票清單
-        </button>
-
-        <div class="input-group input-group-sm mb-2">
-            <span class="input-group-text">隨機張數</span>
-            <input type="number" id="randomTicketCountInput" class="form-control" min="1" max="${MAX_TICKETS_PER_BUY}" value="5">
-            <button type="button" class="btn btn-outline-success fw-bold" onclick="addRandomTicketsToBatch()">
-                🎲 加入隨機票
-            </button>
-        </div>
-
-        <div id="batchTicketSummary" class="small text-muted mb-2">
-            目前購票清單：0 張
-        </div>
-
-        <div id="batchTicketList" class="small"></div>
-    `;
-
-    buyBtn.parentNode.insertBefore(panel, buyBtn);
+function addRandomTicketsToBatch(){
+  const input=document.getElementById("randomTicketCountInput"); let count=Number(input?.value||0); if(!Number.isInteger(count)||count<=0){alert("請輸入正確的隨機張數。");return;}
+  const remaining=MAX_TICKETS_PER_BUY-batchTickets.length; if(remaining<=0){alert(`購票清單已達上限 ${MAX_TICKETS_PER_BUY} 張。`);return;} if(count>remaining)count=remaining;
+  let added=0, guard=0; while(added<count&&guard<count*30){guard++; const nums=generateRandomNumbers(); const key=numbersToKey(nums); if(batchTickets.some(t=>numbersToKey(t.numbers)===key))continue; batchTickets.push({numbers:nums, mask:encodeMask(nums)}); added++;}
+  renderBatchTickets(); updateSelectedDisplay();
 }
-
-function numbersToKey(numbers) {
-    return numbers.slice().sort((a, b) => a - b).join(",");
+function removeBatchTicket(index){ if(index>=0&&index<batchTickets.length){batchTickets.splice(index,1); renderBatchTickets(); updateSelectedDisplay();} }
+function clearTicketBatch(){ batchTickets=[]; renderBatchTickets(); updateSelectedDisplay(); }
+function renderBatchTickets(){
+  const summary=document.getElementById("batchTicketSummary"), list=document.getElementById("batchTicketList"); if(!summary||!list)return;
+  summary.innerText=`目前購票清單：${batchTickets.length} 張`; if(batchTickets.length===0){list.innerHTML=`<div class="text-muted">尚未加入任何彩券。</div>`; return;}
+  list.innerHTML=batchTickets.map((t,i)=>`<div class="batch-ticket-row d-flex justify-content-between align-items-center border rounded bg-white px-2 py-1 mb-1"><span class="batch-ticket-numbers">#${i+1}：${t.numbers.join(", ")}</span><button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="removeBatchTicket(${i})">移除</button></div>`).join("");
 }
-
-function generateRandomNumbers() {
-    const nums = [];
-
-    while (nums.length < 6) {
-        const n = Math.floor(Math.random() * 49) + 1;
-        if (!nums.includes(n)) nums.push(n);
-    }
-
-    return nums.sort((a, b) => a - b);
+function getPurchaseMasks(){ if(batchTickets.length>0)return batchTickets.map(t=>t.mask); if(selectedNumbers.length===6)return [encodeMask(selectedNumbers)]; return []; }
+function encodeMask(numbers){ let mask=ethers.BigNumber.from(0); for(const n of numbers)mask=mask.or(ethers.BigNumber.from(1).shl(n)); return mask; }
+function decodeMask(mask){ const nums=[]; for(let i=1;i<=49;i++){ if(mask.and(ethers.BigNumber.from(1).shl(i)).gt(0)) nums.push(i);} return nums; }
+function getOwnerFromPacked(packed){ const ownerPart=packed.shr(96); const hex=ownerPart.toHexString().replace("0x","").padStart(40,"0").slice(-40); return ethers.utils.getAddress("0x"+hex); }
+function getRoundFromPacked(packed){ return packed.shr(64).and(ethers.BigNumber.from("0xffffffff")).toNumber(); }
+function getMaskFromPacked(packed){ return packed.shr(14).and(ethers.BigNumber.from(2).pow(50).sub(1)); }
+function isClaimedFromPacked(packed){ return packed.and(1).eq(1); }
+function calculateMatches(ticketNums, winningNums){ return ticketNums.filter(n=>winningNums.includes(n)).length; }
+function getSavedTicketIds(){ if(!userAddress)return []; try{const a=JSON.parse(localStorage.getItem(getCacheKey(userAddress))||"[]"); return Array.isArray(a)?[...new Set(a.map(Number).filter(n=>Number.isInteger(n)&&n>=0))]:[];}catch{return [];} }
+function saveTicketIds(ids){ if(!userAddress)return; localStorage.setItem(getCacheKey(userAddress), JSON.stringify([...new Set(ids.map(Number).filter(n=>Number.isInteger(n)&&n>=0))])); }
+function appendTicketId(id){ const ids=getSavedTicketIds(); if(!ids.includes(id)){ids.push(id);saveTicketIds(ids);} }
+function injectReloadTicketsButton(){
+  const list=document.getElementById("myTicketsList"); if(!list||document.getElementById("reloadTicketsBtn"))return;
+  const wrapper=document.createElement("div"); wrapper.className="mb-3 text-end"; wrapper.innerHTML=`<button id="reloadTicketsBtn" class="btn btn-outline-primary btn-sm fw-bold" onclick="forceReloadTicketsFromChain()">從 API 讀取彩券</button><div id="reloadTicketsHint" class="form-text text-muted mt-1">購票成功後會自動寫入 API；若畫面未更新，請按此從 API 重新讀取。</div>`; list.parentNode.insertBefore(wrapper,list);
 }
-
-function addCurrentSelectionToBatch() {
-    if (selectedNumbers.length !== 6) {
-        alert("請先選擇 6 個號碼！");
-        return;
-    }
-
-    if (batchTickets.length >= MAX_TICKETS_PER_BUY) {
-        alert(`單次最多只能購買 ${MAX_TICKETS_PER_BUY} 張。`);
-        return;
-    }
-
-    const nums = selectedNumbers.slice().sort((a, b) => a - b);
-    const key = numbersToKey(nums);
-
-    const exists = batchTickets.some(ticket => numbersToKey(ticket.numbers) === key);
-    if (exists) {
-        alert("這組號碼已經在購票清單中。");
-        return;
-    }
-
-    batchTickets.push({
-        numbers: nums,
-        mask: encodeMask(nums)
-    });
-
-    renderBatchTickets();
-    updateSelectedDisplay();
+function updateReloadTicketButtonText(){ const btn=document.getElementById("reloadTicketsBtn"), hint=document.getElementById("reloadTicketsHint"); if(!btn)return; const ids=getSavedTicketIds(); btn.innerText=ids.length?"重新讀取鏈上票券":"讀取鏈上票券"; if(hint)hint.innerText=ids.length?"如果彩券沒有顯示、換裝置或快取遺失，請按此重新掃描近期鏈上票券。":"第一次使用或更換裝置時，請按此從鏈上讀取近期票券。"; }
+function extractTicketIdsFromReceipt(receipt){ const iface=new ethers.utils.Interface(CONTRACT_ABI); const ids=[]; for(const log of receipt.logs){ if(log.address.toLowerCase()!==LOTTERY_CONTRACT_ADDRESS.toLowerCase())continue; try{const p=iface.parseLog(log); if(p.name==="TicketBought") ids.push(p.args.ticketId.toNumber());}catch{}} return ids; }
+async function reportBoughtTicketsToApi(ticketIds, txHash){
+  try{ if(!API_BASE_URL||!Array.isArray(ticketIds)||ticketIds.length===0||!userAddress)return; const res=await fetch(`${API_BASE_URL}/api/tickets/report`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({wallet:userAddress,txHash,ticketIds})}); const data=await res.json().catch(()=>null); if(!res.ok||!data?.ok){console.warn("[api] ticket report failed",data);return;} console.log("[api] ticket report ok",data); }catch(e){ console.warn("[api] ticket report skipped/failed",e); }
 }
-
-function addRandomTicketsToBatch() {
-    const input = document.getElementById("randomTicketCountInput");
-    let count = Number(input?.value || 0);
-
-    if (!Number.isInteger(count) || count <= 0) {
-        alert("請輸入正確的隨機張數。");
-        return;
-    }
-
-    const remaining = MAX_TICKETS_PER_BUY - batchTickets.length;
-    if (remaining <= 0) {
-        alert(`購票清單已達上限 ${MAX_TICKETS_PER_BUY} 張。`);
-        return;
-    }
-
-    if (count > remaining) count = remaining;
-
-    let added = 0;
-    let guard = 0;
-
-    while (added < count && guard < count * 30) {
-        guard++;
-
-        const nums = generateRandomNumbers();
-        const key = numbersToKey(nums);
-        const exists = batchTickets.some(ticket => numbersToKey(ticket.numbers) === key);
-        if (exists) continue;
-
-        batchTickets.push({
-            numbers: nums,
-            mask: encodeMask(nums)
-        });
-
-        added++;
-    }
-
-    renderBatchTickets();
-    updateSelectedDisplay();
+async function updateLotteryPoolData(){
+  const c=readContract||lotteryContract; if(!c)return;
+  try{
+    const [roundBN,endBN]=await Promise.all([c.currentRound(),c.endTime()]); const round=roundBN.toNumber();
+    const [jp,t2,t3,sp,nextId]=await Promise.all([c.jackpotPool(round),c.tier2Pool(round),c.tier3Pool(round),c.specialPool(round),c.nextTicketId()]);
+    document.getElementById("totalPoolDisplay").innerText=Number(ethers.utils.formatEther(jp.add(t2).add(t3))).toFixed(4)+" BNB";
+    document.getElementById("specialPoolDisplay").innerText=Number(ethers.utils.formatEther(sp)).toFixed(4)+" BNB";
+    document.getElementById("roundDisplay").innerText=`當前期數：第 ${round} 期`;
+    if(endBN.eq(0)) document.getElementById("lastTicketDisplay").innerText="當前最後彩票 ID：尚未啟動"; else if(nextId.gt(0)) document.getElementById("lastTicketDisplay").innerText=`當前最後彩票 ID：${(await c.lastTicketId(round)).toString()}`;
+    if(endBN.eq(0)){ if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null;} activeCountdownEndTime=0; document.getElementById("countdownDisplay").innerText="等待第一筆投注啟動倒數"; document.getElementById("countdownDisplay").className="fw-bold text-success"; isLotteryExpired=false; updateBuyButtonState(); return; }
+    const end=endBN.toNumber(); if(activeCountdownEndTime!==end){ activeCountdownEndTime=end; if(countdownTimer)clearInterval(countdownTimer); countdownTimer=setInterval(()=>{ const d=activeCountdownEndTime-Math.floor(Date.now()/1000); if(d<=0){document.getElementById("countdownDisplay").innerText="本期已到期，等待 VRF 開獎與 Oracle 計算中！";isLotteryExpired=true;updateBuyButtonState();clearInterval(countdownTimer);countdownTimer=null;return;} isLotteryExpired=false;updateBuyButtonState(); const days=Math.floor(d/86400),h=Math.floor((d%86400)/3600),m=Math.floor((d%3600)/60),s=d%60; document.getElementById("countdownDisplay").innerText=`${days}天 ${h}小時 ${m}分 ${s}秒`;},1000); }
+  }catch(e){ console.error("刷新鏈上即時獎池失敗：",e); }
 }
-
-function removeBatchTicket(index) {
-    if (index < 0 || index >= batchTickets.length) return;
-
-    batchTickets.splice(index, 1);
-    renderBatchTickets();
-    updateSelectedDisplay();
+async function buyTicket(){
+  if(!window.ethereum){alert("請先安裝 MetaMask 錢包！");return;}
+  try{
+    const wp=new ethers.providers.Web3Provider(window.ethereum); if(!(await _forceEnsureBSCTestnet(wp)))return; if(!signer){alert("請先點擊上方按鈕連結 MetaMask 錢包！"); await connectWallet(); return;} if(isLotteryExpired){alert("投注失敗：本期樂透已截止倒數！請等待開獎。 ");return;}
+    const masks=getPurchaseMasks(); if(masks.length===0){alert("請先選擇 6 個號碼，或加入多張購票清單。 ");return;} if(masks.length>MAX_TICKETS_PER_BUY){alert(`單次最多只能購買 ${MAX_TICKETS_PER_BUY} 張。`);return;}
+    const active=new ethers.Contract(LOTTERY_CONTRACT_ADDRESS,CONTRACT_ABI,signer); const total=ethers.utils.parseEther(TICKET_PRICE_BNB).mul(masks.length); const tx=await active.buy(masks,{value:total}); alert(`彩券交易已送出，共 ${masks.length} 張，等待區塊鏈打包中...`); const receipt=await tx.wait(); let boughtIds=extractTicketIdsFromReceipt(receipt);
+    if(boughtIds.length===0){ const nextId=await readContract.nextTicketId(); const last=nextId.toNumber()-1; for(let id=Math.max(0,last-masks.length+1);id<=last;id++) boughtIds.push(id); }
+    boughtIds.forEach(id=>appendTicketId(id)); await reportBoughtTicketsToApi(boughtIds,receipt.transactionHash);
+    resetTicketUiCacheState(); updateReloadTicketButtonText(); alert(`購買成功！本次共購買 ${masks.length} 張彩券，已登記於鏈上。`); selectedNumbers=[];batchTickets=[];document.querySelectorAll(".number-btn").forEach(btn=>{btn.className="btn btn-outline-secondary number-btn";}); renderBatchTickets();updateSelectedDisplay(); await updateLotteryPoolData(); if(userAddress)await loadMyTickets(true);
+  }catch(e){ console.error(e); const msg=e?.error?.message||e?.data?.message||e?.reason||e?.message||String(e); alert("交易失敗原因: "+msg); }
 }
-
-function clearTicketBatch() {
-    batchTickets = [];
-    renderBatchTickets();
-    updateSelectedDisplay();
+async function fetchTicketsFromApiForWallet(){
+  if(!API_BASE_URL) throw new Error("API_BASE_URL 尚未設定");
+  if(!userAddress) return [];
+  const url=`${API_BASE_URL}/api/tickets?address=${encodeURIComponent(userAddress)}&limit=1000`;
+  const res=await fetch(url,{method:"GET"});
+  const data=await res.json().catch(()=>null);
+  if(!res.ok||!data?.ok) throw new Error(data?.error||`API 讀票失敗 HTTP ${res.status}`);
+  return Array.isArray(data.tickets)?data.tickets:[];
 }
-
-function renderBatchTickets() {
-    const summary = document.getElementById("batchTicketSummary");
-    const list = document.getElementById("batchTicketList");
-
-    if (!summary || !list) return;
-
-    summary.innerText = `目前購票清單：${batchTickets.length} 張`;
-
-    if (batchTickets.length === 0) {
-        list.innerHTML = `<div class="text-muted">尚未加入任何彩券。</div>`;
-        return;
-    }
-
-    list.innerHTML = batchTickets.map((ticket, index) => {
-        return `
-            <div class="batch-ticket-row d-flex justify-content-between align-items-center border rounded bg-white px-2 py-1 mb-1">
-                <span class="batch-ticket-numbers">#${index + 1}：${ticket.numbers.join(", ")}</span>
-                <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="removeBatchTicket(${index})">
-                    移除
-                </button>
-            </div>
-        `;
-    }).join("");
-}
-
-function getPurchaseMasks() {
-    if (batchTickets.length > 0) {
-        return batchTickets.map(ticket => ticket.mask);
-    }
-
-    if (selectedNumbers.length === 6) {
-        return [encodeMask(selectedNumbers)];
-    }
-
-    return [];
-}
-
-// ==========================================
-// bitmask encode/decode
-// ==========================================
-
-function encodeMask(numbers) {
-    let mask = ethers.BigNumber.from(0);
-
-    for (const n of numbers) {
-        mask = mask.or(ethers.BigNumber.from(1).shl(n));
-    }
-
-    return mask;
-}
-
-function decodeMask(mask) {
-    const nums = [];
-
-    for (let i = 1; i <= 49; i++) {
-        if (mask.and(ethers.BigNumber.from(1).shl(i)).gt(0)) nums.push(i);
-    }
-
-    return nums;
-}
-
-function getOwnerFromPacked(packed) {
-    const ownerPart = packed.shr(96);
-    const hex = ownerPart.toHexString().replace("0x", "").padStart(40, "0").slice(-40);
-    return ethers.utils.getAddress("0x" + hex);
-}
-
-function getRoundFromPacked(packed) {
-    return packed.shr(64).and(ethers.BigNumber.from("0xffffffff")).toNumber();
-}
-
-function getMaskFromPacked(packed) {
-    return packed.shr(14).and(ethers.BigNumber.from(2).pow(50).sub(1));
-}
-
-function isClaimedFromPacked(packed) {
-    return packed.and(1).eq(1);
-}
-
-function calculateMatches(ticketNums, winningNums) {
-    let matches = 0;
-
-    for (const n of ticketNums) {
-        if (winningNums.includes(n)) matches++;
-    }
-
-    return matches;
-}
-
-// ==========================================
-// localStorage 快取
-// ==========================================
-
-function getSavedTicketIds() {
-    if (!userAddress) return [];
-
-    const raw = localStorage.getItem(getCacheKey(userAddress));
-    if (!raw) return [];
-
-    try {
-        const arr = JSON.parse(raw);
-        if (!Array.isArray(arr)) return [];
-        return [...new Set(arr.map(value => Number(value)).filter(value => Number.isInteger(value) && value >= 0))];
-    } catch {
-        return [];
-    }
-}
-
-function saveTicketIds(ids) {
-    if (!userAddress) return;
-
-    const clean = [...new Set(ids.map(value => Number(value)).filter(value => Number.isInteger(value) && value >= 0))];
-    localStorage.setItem(getCacheKey(userAddress), JSON.stringify(clean));
-}
-
-function appendTicketId(id) {
-    const ids = getSavedTicketIds();
-
-    if (!ids.includes(id)) {
-        ids.push(id);
-        saveTicketIds(ids);
-    }
-}
-
-function clearCurrentWalletTicketCache() {
-    if (!userAddress) return;
-
-    localStorage.removeItem(getCacheKey(userAddress));
+async function forceReloadTicketsFromChain(){
+  // 保留原按鈕入口，但改為只呼叫 API，不再掃鏈。
+  if(!userAddress){alert("請先連結錢包！");return;}
+  const btn=document.getElementById("reloadTicketsBtn");
+  try{
+    if(btn){btn.disabled=true;btn.innerText="正在從 API 讀取彩券...";}
     resetTicketUiCacheState();
+    await loadMyTickets(true);
+  }catch(e){console.error("API 讀票失敗",e);alert("API 讀票失敗："+(e?.message||e));}
+  finally{if(btn){btn.disabled=false;updateReloadTicketButtonText();}}
 }
-
-// ==========================================
-// 讀取鏈上票券按鈕
-// ==========================================
-
-function injectReloadTicketsButton() {
-    const myTicketsList = document.getElementById("myTicketsList");
-    if (!myTicketsList) return;
-    if (document.getElementById("reloadTicketsBtn")) return;
-
-    const wrapper = document.createElement("div");
-    wrapper.className = "mb-3 text-end";
-    wrapper.innerHTML = `
-        <button id="reloadTicketsBtn" class="btn btn-outline-primary btn-sm fw-bold" onclick="forceReloadTicketsFromChain()">讀取鏈上票券</button>
-        <div id="reloadTicketsHint" class="form-text text-muted mt-1">第一次使用或更換裝置時，請按此從鏈上讀取近期票券。</div>
-    `;
-
-    myTicketsList.parentNode.insertBefore(wrapper, myTicketsList);
+function updateReloadTicketButtonText(){
+  const btn=document.getElementById("reloadTicketsBtn");
+  const hint=document.getElementById("reloadTicketsHint");
+  if(!btn)return;
+  btn.innerText="從 API 讀取彩券";
+  if(hint)hint.innerText="購票成功後會自動寫入 API；若畫面未更新，請按此從 API 重新讀取。";
 }
-
-function updateReloadTicketButtonText() {
-    const btn = document.getElementById("reloadTicketsBtn");
-    const hint = document.getElementById("reloadTicketsHint");
-    if (!btn) return;
-
-    if (!userAddress) {
-        btn.innerText = "讀取鏈上票券";
-        if (hint) hint.innerText = "請先連結錢包，再從鏈上讀取近期票券。";
-        return;
+async function loadMyTickets(force=false){
+  if(!userAddress)return;
+  if(!force&&ticketsLoadedOnce){console.log("loadMyTickets skipped: API data already rendered");updateReloadTicketButtonText();return;}
+  if(ticketsLoading)return;
+  ticketsLoading=true;
+  const c=readContract||lotteryContract;
+  const container=document.getElementById("myTicketsList");
+  const loader=document.getElementById("loadingTickets");
+  if(!container||!loader||!c){ticketsLoading=false;return;}
+  loader.classList.remove("d-none");
+  container.innerHTML="";
+  try{
+    const apiTickets=await fetchTicketsFromApiForWallet();
+    if(!apiTickets.length){
+      container.innerHTML=`<div class="text-center py-5 text-muted">API 目前尚未收錄此錢包的彩券。<br>請先使用官方前端購票；購票成功後系統會自動寫入 API。</div>`;
+      ticketsLoadedOnce=true;lastRenderedTicketSig="";updateReloadTicketButtonText();return;
     }
-
-    const ids = getSavedTicketIds();
-
-    if (ids.length === 0) {
-        btn.innerText = "讀取鏈上票券";
-        if (hint) hint.innerText = "第一次使用或更換裝置時，請按此從鏈上讀取近期票券。";
-    } else {
-        btn.innerText = "重新讀取鏈上票券";
-        if (hint) hint.innerText = "如果彩券沒有顯示、換裝置或快取遺失，請按此重新掃描近期鏈上票券。";
+    const currentRound=(await c.currentRound()).toNumber();
+    const minRound=Math.max(1,currentRound-1);
+    const validTickets=apiTickets.map(t=>({
+      id:Number(t.ticketId),
+      round:Number(t.round),
+      mask:ethers.BigNumber.from(t.mask),
+      numbers:Array.isArray(t.numbers)&&t.numbers.length?t.numbers.map(Number):decodeMask(ethers.BigNumber.from(t.mask)),
+      txHash:t.txHash||null,
+      source:t.source||"api"
+    })).filter(t=>Number.isInteger(t.id)&&t.id>=0)
+      .filter(t=>t.round>=minRound&&t.round<=currentRound)
+      .sort((a,b)=>b.id-a.id);
+    if(!validTickets.length){
+      container.innerHTML=`<div class="text-center py-5 text-muted">API 有資料，但目前沒有近兩期彩券。<br>目前只顯示第 ${minRound} 期至第 ${currentRound} 期。</div>`;
+      ticketsLoadedOnce=true;lastRenderedTicketSig=getTicketIdsSignature(apiTickets.map(t=>t.ticketId));updateReloadTicketButtonText();return;
     }
+    for(const t of validTickets){
+      const id=t.id, roundNum=t.round, currentNumbers=t.numbers;
+      let isClaimed=false;
+      try{const packed=await c.tickets(id);if(packed&&!packed.isZero())isClaimed=isClaimedFromPacked(packed);}catch(e){console.warn("讀取 claimed 狀態失敗",id,e);}
+      const isDrawn=await c.drawn(roundNum);
+      let statusBadge="",actionButton="";
+      if(isClaimed)statusBadge=`<span class="badge bg-secondary fs-6">已提領並銷毀此券</span>`;
+      else if(!isDrawn)statusBadge=`<span class="badge bg-warning text-dark fs-6">等待當期開獎中</span>`;
+      else{
+        const w=await c.winners(roundNum);
+        if(!w.set)statusBadge=`<span class="badge bg-info text-dark fs-6">已開獎，等待 Oracle 計算中</span>`;
+        else{
+          const winMask=await c.winningMask(roundNum);
+          const winningNumbers=decodeMask(winMask);
+          const matchCount=calculateMatches(currentNumbers,winningNumbers);
+          const lastTicketIdOfRound=await c.lastTicketId(roundNum);
+          const isSpecialWinner=id===lastTicketIdOfRound.toNumber();
+          const drawTime=await c.drawTime(roundNum);
+          const claimDuration=await c.claimDuration();
+          const expired=Math.floor(Date.now()/1000)>drawTime.toNumber()+claimDuration.toNumber();
+          if(expired)statusBadge=`<span class="badge bg-dark fs-6">已超過領獎期限</span>`;
+          else if(matchCount>=4||isSpecialWinner){
+            let rewardName=matchCount===6?"頭獎 6 星":matchCount===5?"二獎 5 星":matchCount===4?"三獎 4 星":"未中一般獎";
+            if(isSpecialWinner)rewardName+=" + 特別獎";
+            statusBadge=`<span class="badge bg-success fs-6">恭喜符合中獎條件 (${rewardName})</span>`;
+            actionButton=`<div class="mt-2"><button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${id})">一鍵提領獎金 (領後銷毀)</button></div>`;
+          }else statusBadge=`<span class="badge bg-danger fs-6">未中獎 (僅對中 ${matchCount} 星)</span>`;
+        }
+      }
+      const card=document.createElement("div");
+      card.className="card ticket-card p-3 shadow-sm bg-white mb-3";
+      card.innerHTML=`<div class="ticket-card-inner d-flex justify-content-between align-items-center"><div class="ticket-info-wrap"><h6 class="fw-bold mb-1 text-secondary">彩券 ID: #${id} (第 ${roundNum} 期)</h6><p class="ticket-number-text mb-0 fs-5 fw-bold text-dark">選號：${currentNumbers.join(", ")}</p></div><div class="ticket-status-wrap">${statusBadge}</div></div>${actionButton}`;
+      container.appendChild(card);
+    }
+    ticketsLoadedOnce=true;lastRenderedTicketSig=getTicketIdsSignature(validTickets.map(t=>t.id));updateReloadTicketButtonText();
+  }catch(e){console.error("API 讀取彩券資料失敗",e);container.innerHTML=`<div class="text-center py-5 text-danger">API 讀取彩券資料失敗：${e?.message||e}</div>`;}
+  finally{loader.classList.add("d-none");ticketsLoading=false;}
 }
-
-async function forceReloadTicketsFromChain() {
-    if (!userAddress) {
-        alert("請先連結錢包！");
-        return;
-    }
-
-    const btn = document.getElementById("reloadTicketsBtn");
-    const container = document.getElementById("myTicketsList");
-    const loader = document.getElementById("loadingTickets");
-
-    try {
-        if (btn) {
-            btn.disabled = true;
-            btn.innerText = "正在重新讀取鏈上票券...";
-        }
-
-        if (loader) loader.classList.remove("d-none");
-        if (container) container.innerHTML = "";
-
-        clearCurrentWalletTicketCache();
-        const ids = await fallbackScanRecentTicketsNearTwoRounds();
-
-        if (ids.length > 0) {
-            saveTicketIds(ids);
-            resetTicketUiCacheState();
-            alert(`已從鏈上重新找回 ${ids.length} 張近兩期彩券`);
-        } else {
-            alert("目前在近兩期鏈上紀錄中沒有找到你的彩券。");
-        }
-
-        updateReloadTicketButtonText();
-        await loadMyTickets(true);
-    } catch (error) {
-        console.error("重新讀取鏈上票券失敗:", error);
-        alert("重新讀取失敗，請查看 vConsole 或稍後再試。");
-    } finally {
-        if (loader) loader.classList.add("d-none");
-        if (btn) {
-            btn.disabled = false;
-            updateReloadTicketButtonText();
-        }
-    }
-}
-
-function extractTicketIdsFromReceipt(receipt) {
-    const iface = new ethers.utils.Interface(CONTRACT_ABI);
-    const ids = [];
-
-    for (const log of receipt.logs) {
-        if (log.address.toLowerCase() !== LOTTERY_CONTRACT_ADDRESS.toLowerCase()) continue;
-
-        try {
-            const parsed = iface.parseLog(log);
-            if (parsed.name === "TicketBought") ids.push(parsed.args.ticketId.toNumber());
-        } catch {
-            // ignore unrelated logs
-        }
-    }
-
-    return ids;
-}
-
-// ==========================================
-// 獎池與倒數：持續更新
-// ==========================================
-
-async function updateLotteryPoolData() {
-    const contract = readContract || lotteryContract;
-    if (!contract) return;
-
-    try {
-        const [roundBN, endTimeBN] = await Promise.all([
-            contract.currentRound(),
-            contract.endTime()
-        ]);
-
-        const currentRound = roundBN.toNumber();
-
-        const [jackpot, tier2, tier3, special, nextId] = await Promise.all([
-            contract.jackpotPool(currentRound),
-            contract.tier2Pool(currentRound),
-            contract.tier3Pool(currentRound),
-            contract.specialPool(currentRound),
-            contract.nextTicketId()
-        ]);
-
-        const totalPool = jackpot.add(tier2).add(tier3);
-
-        document.getElementById("totalPoolDisplay").innerText =
-            Number(ethers.utils.formatEther(totalPool)).toFixed(4) + " BNB";
-
-        document.getElementById("specialPoolDisplay").innerText =
-            Number(ethers.utils.formatEther(special)).toFixed(4) + " BNB";
-
-        document.getElementById("roundDisplay").innerText = `當前期數：第 ${currentRound} 期`;
-
-        try {
-            if (endTimeBN.eq(0)) {
-                document.getElementById("lastTicketDisplay").innerText = "當前最後彩票 ID：尚未啟動";
-            } else if (nextId.gt(0)) {
-                const lastId = await contract.lastTicketId(currentRound);
-                document.getElementById("lastTicketDisplay").innerText = `當前最後彩票 ID：${lastId.toString()}`;
-            } else {
-                document.getElementById("lastTicketDisplay").innerText = "當前最後彩票 ID：--";
-            }
-        } catch (error) {
-            console.log("讀取最後彩票 ID 失敗:", error);
-        }
-
-        if (endTimeBN.eq(0)) {
-            if (countdownTimer) {
-                clearInterval(countdownTimer);
-                countdownTimer = null;
-            }
-
-            activeCountdownEndTime = 0;
-            document.getElementById("countdownDisplay").innerText = "等待第一筆投注啟動倒數";
-            document.getElementById("countdownDisplay").className = "fw-bold text-success";
-            isLotteryExpired = false;
-            updateBuyButtonState();
-            return;
-        }
-
-        const endTimeSec = endTimeBN.toNumber();
-
-        if (activeCountdownEndTime !== endTimeSec) {
-            activeCountdownEndTime = endTimeSec;
-
-            if (countdownTimer) {
-                clearInterval(countdownTimer);
-                countdownTimer = null;
-            }
-
-            document.getElementById("countdownDisplay").className = "fw-bold text-dark";
-
-            countdownTimer = setInterval(() => {
-                const distance = activeCountdownEndTime - Math.floor(Date.now() / 1000);
-
-                if (distance <= 0) {
-                    document.getElementById("countdownDisplay").innerText = "本期已到期，等待 VRF 開獎與 Oracle 計算中！";
-                    isLotteryExpired = true;
-                    updateBuyButtonState();
-                    clearInterval(countdownTimer);
-                    countdownTimer = null;
-                    return;
-                }
-
-                isLotteryExpired = false;
-                updateBuyButtonState();
-
-                const days = Math.floor(distance / 86400);
-                const hours = Math.floor((distance % 86400) / 3600);
-                const minutes = Math.floor((distance % 3600) / 60);
-                const seconds = distance % 60;
-
-                document.getElementById("countdownDisplay").innerText =
-                    `${days}天 ${hours}小時 ${minutes}分 ${seconds}秒`;
-            }, 1000);
-        }
-    } catch (error) {
-        console.error("刷新鏈上即時獎池失敗：", error);
-    }
-}
-
-// ==========================================
-// 購買彩券：支援單張與批量 masks
-// ==========================================
-
-async function buyTicket() {
-    if (!window.ethereum) {
-        alert("請先安裝 MetaMask 錢包！");
-        return;
-    }
-
-    try {
-        validateContractAddress();
-
-        const currentProvider = new ethers.providers.Web3Provider(window.ethereum);
-        const isCorrectNet = await _forceEnsureBSCTestnet(currentProvider);
-        if (!isCorrectNet) return;
-
-        if (!signer) {
-            alert("請先點擊上方按鈕連結 MetaMask 錢包！");
-            await connectWallet();
-            return;
-        }
-
-        if (isLotteryExpired) {
-            alert("投注失敗：本期樂透已截止倒數！請等待開獎。");
-            return;
-        }
-
-        const masks = getPurchaseMasks();
-
-        if (masks.length === 0) {
-            alert("請先選擇 6 個號碼，或加入多張購票清單。");
-            return;
-        }
-
-        if (masks.length > MAX_TICKETS_PER_BUY) {
-            alert(`單次最多只能購買 ${MAX_TICKETS_PER_BUY} 張。`);
-            return;
-        }
-
-        const ticketPrice = ethers.utils.parseEther(TICKET_PRICE_BNB);
-        const totalPrice = ticketPrice.mul(masks.length);
-
-        const activeContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-
-        const tx = await activeContract.buy(masks, { value: totalPrice });
-
-        if (masks.length > 1) {
-            alert(`彩券交易已送出，共 ${masks.length} 張，等待區塊鏈打包中...`);
-        } else {
-            alert("彩券交易已送出，等待區塊鏈打包中...");
-        }
-
-        const receipt = await tx.wait();
-        const boughtIds = extractTicketIdsFromReceipt(receipt);
-
-        if (boughtIds.length > 0) {
-            boughtIds.forEach(id => appendTicketId(id));
-        } else {
-            const nextId = await readContract.nextTicketId();
-            const lastId = nextId.toNumber() - 1;
-            const firstId = Math.max(0, lastId - masks.length + 1);
-            for (let id = firstId; id <= lastId; id++) appendTicketId(id);
-        }
-
-        resetTicketUiCacheState();
-        updateReloadTicketButtonText();
-
-        alert(`購買成功！本次共購買 ${masks.length} 張彩券，已登記於鏈上。`);
-
-        selectedNumbers = [];
-        batchTickets = [];
-
-        const selectedDisplay = document.getElementById("selectedNumbersDisplay");
-        if (selectedDisplay) selectedDisplay.innerText = "尚未選擇";
-
-        document.querySelectorAll(".number-btn").forEach(btn => {
-            btn.className = "btn btn-outline-secondary number-btn";
-        });
-
-        renderBatchTickets();
-        updateSelectedDisplay();
-
-        await updateLotteryPoolData();
-        if (userAddress) await loadMyTickets(true);
-    } catch (error) {
-        console.error(error);
-        const msg = error?.error?.message || error?.data?.message || error?.reason || error?.message || String(error);
-        alert("交易失敗原因: " + msg);
-    }
-}
-
-// ==========================================
-// fallback 掃描近兩期票，不用 queryFilter
-// ==========================================
-
-async function fallbackScanRecentTicketsNearTwoRounds() {
-    const contract = readContract || lotteryContract;
-    const found = [];
-
-    if (!contract || !userAddress) return found;
-
-    try {
-        const [nextIdBN, currentRoundBN] = await Promise.all([
-            contract.nextTicketId(),
-            contract.currentRound()
-        ]);
-
-        if (nextIdBN.eq(0)) return found;
-
-        const latest = nextIdBN.toNumber() - 1;
-        const currentRound = currentRoundBN.toNumber();
-        const minRound = Math.max(1, currentRound - 1);
-        const hardStart = Math.max(0, latest - FALLBACK_SCAN_LIMIT + 1);
-
-        console.log("fallback scan latest =", latest, "currentRound =", currentRound, "minRound =", minRound);
-
-        for (let batchEnd = latest; batchEnd >= hardStart; batchEnd -= FALLBACK_BATCH_SIZE) {
-            const batchStart = Math.max(hardStart, batchEnd - FALLBACK_BATCH_SIZE + 1);
-            const ids = [];
-
-            for (let id = batchEnd; id >= batchStart; id--) ids.push(id);
-
-            const packedList = await Promise.all(ids.map(async id => {
-                try {
-                    const packed = await contract.tickets(id);
-                    return { id, packed };
-                } catch (error) {
-                    console.warn("讀取 ticket 失敗:", id, error);
-                    return null;
-                }
-            }));
-
-            for (const item of packedList) {
-                if (!item || !item.packed || item.packed.isZero()) continue;
-
-                const round = getRoundFromPacked(item.packed);
-
-                if (round < minRound) {
-                    return [...new Set(found)];
-                }
-
-                if (round === currentRound || round === currentRound - 1) {
-                    const owner = getOwnerFromPacked(item.packed);
-                    if (owner.toLowerCase() === userAddress.toLowerCase()) found.push(item.id);
-                }
-            }
-
-            if (batchStart === 0) break;
-        }
-    } catch (error) {
-        console.warn("fallbackScanRecentTicketsNearTwoRounds failed:", error);
-    }
-
-    return [...new Set(found)];
-}
-
-// ==========================================
-// 載入我的彩券：切 tab 不重抓，但獎池倒數仍持續更新
-// ==========================================
-
-async function loadMyTickets(force = false) {
-    if (!userAddress) return;
-
-    const cachedIds = getSavedTicketIds();
-    const currentSig = getTicketIdsSignature(cachedIds);
-
-    if (!force && ticketsLoadedOnce && currentSig === lastRenderedTicketSig) {
-        console.log("loadMyTickets skipped: already rendered and cache unchanged");
-        updateReloadTicketButtonText();
-        return;
-    }
-
-    if (ticketsLoading) {
-        console.log("loadMyTickets skipped: already loading");
-        return;
-    }
-
-    ticketsLoading = true;
-    const renderSeq = ++ticketsRenderSeq;
-    const contract = readContract || lotteryContract;
-
-    if (!contract) {
-        ticketsLoading = false;
-        return;
-    }
-
-    const container = document.getElementById("myTicketsList");
-    const loader = document.getElementById("loadingTickets");
-
-    if (!container || !loader) {
-        ticketsLoading = false;
-        return;
-    }
-
-    loader.classList.remove("d-none");
-    container.innerHTML = "";
-
-    try {
-        let ids = cachedIds;
-        ids = [...new Set(ids.map(value => Number(value)).filter(value => Number.isInteger(value) && value >= 0))];
-
-        if (ids.length === 0) {
-            console.log("localStorage 無資料，fallback 掃近兩期票。 ");
-            ids = await fallbackScanRecentTicketsNearTwoRounds();
-            ids = [...new Set(ids.map(value => Number(value)).filter(value => Number.isInteger(value) && value >= 0))];
-            if (ids.length > 0) saveTicketIds(ids);
-        } else {
-            saveTicketIds(ids);
-        }
-
-        updateReloadTicketButtonText();
-
-        if (ids.length === 0) {
-            if (renderSeq !== ticketsRenderSeq) return;
-            container.innerHTML = `<div class="text-center py-5 text-muted">您目前尚無近兩期彩券紀錄。</div>`;
-            ticketsLoadedOnce = true;
-            lastRenderedTicketSig = getTicketIdsSignature(ids);
-            return;
-        }
-
-        ids = [...new Set(ids)].sort((a, b) => b - a);
-
-        const [currentRoundBN, packedList] = await Promise.all([
-            contract.currentRound(),
-            Promise.all(ids.map(async id => {
-                try {
-                    const packed = await contract.tickets(id);
-                    return { id, packed };
-                } catch (error) {
-                    console.warn("讀取 ticket 失敗:", id, error);
-                    return null;
-                }
-            }))
-        ]);
-
-        const currentRound = currentRoundBN.toNumber();
-        const minRound = Math.max(1, currentRound - 1);
-
-        const ticketMap = new Map();
-
-        for (const item of packedList) {
-            if (!item || !item.packed || item.packed.isZero()) continue;
-
-            const owner = getOwnerFromPacked(item.packed);
-            const round = getRoundFromPacked(item.packed);
-
-            if (owner.toLowerCase() !== userAddress.toLowerCase()) continue;
-            if (round < minRound || round > currentRound) continue;
-
-            ticketMap.set(Number(item.id), item);
-        }
-
-        const validTickets = Array.from(ticketMap.values()).sort((a, b) => b.id - a.id);
-
-        if (renderSeq !== ticketsRenderSeq) return;
-
-        container.innerHTML = "";
-
-        if (validTickets.length === 0) {
-            container.innerHTML = `<div class="text-center py-5 text-muted">目前沒有找到屬於此錢包的近兩期彩券。</div>`;
-            ticketsLoadedOnce = true;
-            lastRenderedTicketSig = getTicketIdsSignature(ids);
-            return;
-        }
-
-        for (const item of validTickets) {
-            if (renderSeq !== ticketsRenderSeq) return;
-
-            const id = item.id;
-            const packed = item.packed;
-            const roundNum = getRoundFromPacked(packed);
-            const mask = getMaskFromPacked(packed);
-            const currentNumbers = decodeMask(mask);
-            const isClaimed = isClaimedFromPacked(packed);
-            const isDrawn = await contract.drawn(roundNum);
-
-            const card = document.createElement("div");
-            card.className = "card ticket-card p-3 shadow-sm bg-white mb-3";
-
-            let statusBadge = "";
-            let actionButton = "";
-
-            if (isClaimed) {
-                statusBadge = `<span class="badge bg-secondary fs-6">已提領並銷毀此券</span>`;
-            } else if (!isDrawn) {
-                statusBadge = `<span class="badge bg-warning text-dark fs-6">等待當期開獎中</span>`;
-            } else {
-                const w = await contract.winners(roundNum);
-                const winnersSet = w.set;
-
-                if (!winnersSet) {
-                    statusBadge = `<span class="badge bg-info text-dark fs-6">已開獎，等待 Oracle 計算中</span>`;
-                } else {
-                    const winMask = await contract.winningMask(roundNum);
-                    const winningNumbers = decodeMask(winMask);
-                    const matchCount = calculateMatches(currentNumbers, winningNumbers);
-                    const lastTicketIdOfRound = await contract.lastTicketId(roundNum);
-                    const isSpecialWinner = id === lastTicketIdOfRound.toNumber();
-                    const drawTime = await contract.drawTime(roundNum);
-                    const claimDuration = await contract.claimDuration();
-                    const nowSec = Math.floor(Date.now() / 1000);
-                    const expired = nowSec > drawTime.toNumber() + claimDuration.toNumber();
-
-                    if (expired) {
-                        statusBadge = `<span class="badge bg-dark fs-6">已超過領獎期限</span>`;
-                    } else if (matchCount >= 4 || isSpecialWinner) {
-                        let rewardName = "";
-
-                        if (matchCount === 6) rewardName = "頭獎 6 星";
-                        else if (matchCount === 5) rewardName = "二獎 5 星";
-                        else if (matchCount === 4) rewardName = "三獎 4 星";
-                        else rewardName = "未中一般獎";
-
-                        if (isSpecialWinner) rewardName += " + 特別獎";
-
-                        statusBadge = `<span class="badge bg-success fs-6">恭喜符合中獎條件 (${rewardName})</span>`;
-                        actionButton = `<div class="mt-2"><button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${id})">一鍵提領獎金 (領後銷毀)</button></div>`;
-                    } else {
-                        statusBadge = `<span class="badge bg-danger fs-6">未中獎 (僅對中 ${matchCount} 星)</span>`;
-                    }
-                }
-            }
-
-            card.innerHTML = `
-                <div class="ticket-card-inner d-flex justify-content-between align-items-center">
-                    <div class="ticket-info-wrap">
-                        <h6 class="fw-bold mb-1 text-secondary">彩券 ID: #${id} (第 ${roundNum} 期)</h6>
-                        <p class="ticket-number-text mb-0 fs-5 fw-bold text-dark">選號：${currentNumbers.join(", ")}</p>
-                    </div>
-                    <div class="ticket-status-wrap">${statusBadge}</div>
-                </div>
-                ${actionButton}
-            `;
-
-            container.appendChild(card);
-        }
-
-        if (container.children.length === 0) {
-            container.innerHTML = `<div class="text-center py-5 text-muted">目前沒有找到屬於此錢包的近兩期彩券。</div>`;
-        }
-
-        ticketsLoadedOnce = true;
-        lastRenderedTicketSig = getTicketIdsSignature(ids);
-    } catch (error) {
-        console.error("讀取彩券資料失敗：", error);
-        const msg = error?.error?.message || error?.data?.message || error?.reason || error?.message || String(error);
-
-        if (renderSeq === ticketsRenderSeq) {
-            container.innerHTML = `<div class="text-center py-5 text-danger">讀取鏈上彩券資料失敗：${msg}</div>`;
-        }
-    } finally {
-        if (renderSeq === ticketsRenderSeq) loader.classList.add("d-none");
-        ticketsLoading = false;
-    }
-}
-
-// ==========================================
-// 領獎
-// ==========================================
-
-async function claimReward(ticketId) {
-    try {
-        if (!signer) {
-            alert("請先連結錢包！");
-            return;
-        }
-
-        const activeContract = new ethers.Contract(LOTTERY_CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-        const tx = await activeContract.claimBatch([ticketId]);
-
-        alert("提領獎金交易已送出，正在等待區塊鏈確認...");
-        await tx.wait();
-        alert("獎金提領成功！彩券已於區塊鏈標記為已領取。");
-
-        resetTicketUiCacheState();
-        await loadMyTickets(true);
-        await updateLotteryPoolData();
-    } catch (error) {
-        console.error(error);
-        const msg = error?.error?.message || error?.data?.message || error?.reason || error?.message || String(error);
-        alert("提領失敗：" + msg);
-    }
-}
-
-
+async function claimReward(ticketId){ try{ if(!signer){alert("請先連結錢包！");return;} const active=new ethers.Contract(LOTTERY_CONTRACT_ADDRESS,CONTRACT_ABI,signer); const tx=await active.claimBatch([ticketId]); alert("提領獎金交易已送出，正在等待區塊鏈確認..."); await tx.wait(); alert("獎金提領成功！彩券已於區塊鏈標記為已領取。 "); resetTicketUiCacheState(); await loadMyTickets(true); await updateLotteryPoolData(); }catch(e){ const msg=e?.error?.message||e?.data?.message||e?.reason||e?.message||String(e); alert("提領失敗："+msg); } }
 </script>
-
-
-
 </body>
 </html>
