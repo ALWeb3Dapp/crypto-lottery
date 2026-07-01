@@ -120,6 +120,8 @@
 // - 手機版彩券卡片 RWD 修正
 // - vConsole 只在 BSC Testnet 顯示
 // - StaticJsonRpcProvider 避免 could not detect network
+// - 2026-07-01 optimized: loadMyTickets 使用 API-only render，不再逐張打鏈；claim 時再由合約驗證
+
 
 const LOTTERY_CONTRACT_ADDRESS = "0x61C55A2236f15D443f1acC88eed6d9f071043ddE";
 const BSC_TESTNET_RPC_URL = "https://bsc-testnet-rpc.publicnode.com";
@@ -826,8 +828,7 @@ async function forceReloadTicketsFromApi() {
         await loadMyTickets(true);
     } catch (error) {
         console.error("從 API 讀取彩券失敗:", error);
-        alert("從 API 讀取彩券失敗，請稍後再試。" + (error?.message ? `
-${error.message}` : ""));
+        alert("從 API 讀取彩券失敗，請稍後再試。" + (error?.message ? `\n${error.message}` : ""));
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -1097,7 +1098,7 @@ async function buyTicket() {
 }
 
 // ==========================================
-// 載入我的彩券：改為 API 讀取，不再大範圍掃鏈
+// 載入我的彩券：API-only render（不再逐張打鏈）
 // ==========================================
 
 async function loadMyTickets(force = false) {
@@ -1116,12 +1117,6 @@ async function loadMyTickets(force = false) {
 
     ticketsLoading = true;
     const renderSeq = ++ticketsRenderSeq;
-    const contract = readContract || lotteryContract;
-
-    if (!contract) {
-        ticketsLoading = false;
-        return;
-    }
 
     const container = document.getElementById("myTicketsList");
     const loader = document.getElementById("loadingTickets");
@@ -1151,15 +1146,11 @@ async function loadMyTickets(force = false) {
             return;
         }
 
-        const currentRoundBN = await contract.currentRound();
-        const currentRound = currentRoundBN.toNumber();
-        const minRound = Math.max(1, currentRound - 1);
-
         const validTickets = apiTickets
             .map(ticket => ({
                 id: Number(ticket.ticketId),
                 round: Number(ticket.round),
-                mask: ethers.BigNumber.from(ticket.mask),
+                mask: ticket.mask,
                 numbers: Array.isArray(ticket.numbers) && ticket.numbers.length
                     ? ticket.numbers.map(Number)
                     : decodeMask(ethers.BigNumber.from(ticket.mask)),
@@ -1167,14 +1158,13 @@ async function loadMyTickets(force = false) {
                 source: ticket.source || "api"
             }))
             .filter(ticket => Number.isInteger(ticket.id) && ticket.id >= 0)
-            .filter(ticket => ticket.round >= minRound && ticket.round <= currentRound)
+            .filter(ticket => Number.isInteger(ticket.round) && ticket.round > 0)
             .sort((a, b) => b.id - a.id);
 
         if (validTickets.length === 0) {
             container.innerHTML = `
                 <div class="text-center py-5 text-muted">
-                    API 有資料，但目前沒有近兩期彩券。<br>
-                    目前只顯示第 ${minRound} 期至第 ${currentRound} 期。
+                    API 有資料，但沒有可顯示的有效彩券。
                 </div>
             `;
             ticketsLoadedOnce = true;
@@ -1182,85 +1172,37 @@ async function loadMyTickets(force = false) {
             return;
         }
 
-        container.innerHTML = "";
-
-        for (const ticket of validTickets) {
-            if (renderSeq !== ticketsRenderSeq) return;
-
+        const html = validTickets.map(ticket => {
             const id = ticket.id;
             const roundNum = ticket.round;
             const currentNumbers = ticket.numbers;
+            const txText = ticket.txHash
+                ? `<div class="small text-muted mt-1">Tx: ${ticket.txHash.slice(0, 10)}...${ticket.txHash.slice(-8)}</div>`
+                : "";
 
-            let isClaimed = false;
-            try {
-                const packed = await contract.tickets(id);
-                if (packed && !packed.isZero()) isClaimed = isClaimedFromPacked(packed);
-            } catch (error) {
-                console.warn("讀取彩券 claimed 狀態失敗，暫時視為未領:", id, error);
-            }
-
-            const isDrawn = await contract.drawn(roundNum);
-            const card = document.createElement("div");
-            card.className = "card ticket-card p-3 shadow-sm bg-white mb-3";
-
-            let statusBadge = "";
-            let actionButton = "";
-
-            if (isClaimed) {
-                statusBadge = `<span class="badge bg-secondary fs-6">已提領並銷毀此券</span>`;
-            } else if (!isDrawn) {
-                statusBadge = `<span class="badge bg-warning text-dark fs-6">等待當期開獎中</span>`;
-            } else {
-                const w = await contract.winners(roundNum);
-                const winnersSet = w.set;
-
-                if (!winnersSet) {
-                    statusBadge = `<span class="badge bg-info text-dark fs-6">已開獎，等待 Oracle 計算中</span>`;
-                } else {
-                    const winMask = await contract.winningMask(roundNum);
-                    const winningNumbers = decodeMask(winMask);
-                    const matchCount = calculateMatches(currentNumbers, winningNumbers);
-                    const lastTicketIdOfRound = await contract.lastTicketId(roundNum);
-                    const isSpecialWinner = id === lastTicketIdOfRound.toNumber();
-                    const drawTime = await contract.drawTime(roundNum);
-                    const claimDuration = await contract.claimDuration();
-                    const nowSec = Math.floor(Date.now() / 1000);
-                    const expired = nowSec > drawTime.toNumber() + claimDuration.toNumber();
-
-                    if (expired) {
-                        statusBadge = `<span class="badge bg-dark fs-6">已超過領獎期限</span>`;
-                    } else if (matchCount >= 4 || isSpecialWinner) {
-                        let rewardName = "";
-
-                        if (matchCount === 6) rewardName = "頭獎 6 星";
-                        else if (matchCount === 5) rewardName = "二獎 5 星";
-                        else if (matchCount === 4) rewardName = "三獎 4 星";
-                        else rewardName = "未中一般獎";
-
-                        if (isSpecialWinner) rewardName += " + 特別獎";
-
-                        statusBadge = `<span class="badge bg-success fs-6">恭喜符合中獎條件 (${rewardName})</span>`;
-                        actionButton = `<div class="mt-2"><button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${id})">一鍵提領獎金 (領後銷毀)</button></div>`;
-                    } else {
-                        statusBadge = `<span class="badge bg-danger fs-6">未中獎 (僅對中 ${matchCount} 星)</span>`;
-                    }
-                }
-            }
-
-            card.innerHTML = `
-                <div class="ticket-card-inner d-flex justify-content-between align-items-center">
-                    <div class="ticket-info-wrap">
-                        <h6 class="fw-bold mb-1 text-secondary">彩券 ID: #${id} (第 ${roundNum} 期)</h6>
-                        <p class="ticket-number-text mb-0 fs-5 fw-bold text-dark">選號：${currentNumbers.join(", ")}</p>
+            return `
+                <div class="card ticket-card p-3 shadow-sm bg-white mb-3">
+                    <div class="ticket-card-inner d-flex justify-content-between align-items-center">
+                        <div class="ticket-info-wrap">
+                            <h6 class="fw-bold mb-1 text-secondary">彩券 ID: #${id} (第 ${roundNum} 期)</h6>
+                            <p class="ticket-number-text mb-0 fs-5 fw-bold text-dark">選號：${currentNumbers.join(", ")}</p>
+                            ${txText}
+                        </div>
+                        <div class="ticket-status-wrap">
+                            <span class="badge bg-info text-dark fs-6">已購票（領獎時由鏈上驗證）</span>
+                        </div>
                     </div>
-                    <div class="ticket-status-wrap">${statusBadge}</div>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${id})">
+                            一鍵提領獎金（鏈上驗證）
+                        </button>
+                    </div>
                 </div>
-                ${actionButton}
             `;
+        }).join("");
 
-            container.appendChild(card);
-        }
-
+        if (renderSeq !== ticketsRenderSeq) return;
+        container.innerHTML = html;
         ticketsLoadedOnce = true;
         lastRenderedTicketSig = getTicketIdsSignature(validTickets.map(ticket => ticket.id));
     } catch (error) {
