@@ -116,12 +116,12 @@
 // - 前端限制單次最多 30 張，避免交易 Gas 過高
 // - 我的彩券改由 Railway API 讀取，不再大範圍掃鏈
 // - 購票成功後 POST /api/tickets/report，由後端驗證並寫入 SQLite
+// - claim 成功後 POST /api/tickets/claim-report，讓 API 更新已提領狀態
 // - 切換頁籤不重抓票，獎池與倒數持續更新
 // - 手機版彩券卡片 RWD 修正
 // - vConsole 只在 BSC Testnet 顯示
 // - StaticJsonRpcProvider 避免 could not detect network
-// - 2026-07-01 optimized: loadMyTickets 使用 API-only render，不再逐張打鏈；claim 時再由合約驗證
-
+// - API-only loadMyTickets：不再逐張打鏈；狀態由 API 欄位顯示
 
 const LOTTERY_CONTRACT_ADDRESS = "0x61C55A2236f15D443f1acC88eed6d9f071043ddE";
 const BSC_TESTNET_RPC_URL = "https://bsc-testnet-rpc.publicnode.com";
@@ -902,6 +902,36 @@ async function reportBoughtTicketsToApi(ticketIds, txHash) {
     }
 }
 
+async function reportClaimedTicketsToApi(ticketIds, txHash) {
+    try {
+        if (!API_BASE_URL || !Array.isArray(ticketIds) || ticketIds.length === 0) return;
+        if (!userAddress) return;
+
+        const res = await fetch(`${API_BASE_URL}/api/tickets/claim-report`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                wallet: userAddress,
+                txHash,
+                ticketIds
+            })
+        });
+
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok || !data?.ok) {
+            console.warn("[api] claim report failed", data);
+            return;
+        }
+
+        console.log("[api] claim report ok", data);
+    } catch (error) {
+        console.warn("[api] claim report skipped/failed", error);
+    }
+}
+
 // ==========================================
 // 獎池與倒數：持續更新
 // ==========================================
@@ -979,7 +1009,7 @@ async function updateLotteryPoolData() {
                 const distance = activeCountdownEndTime - Math.floor(Date.now() / 1000);
 
                 if (distance <= 0) {
-                    document.getElementById("countdownDisplay").innerText = "本期已到期，等待 VRF 開獎與 Oracle 計算中！";
+                    document.getElementById("countdownDisplay").innerText = "本期已到期，等待 VRF 開獎與計算中！";
                     isLotteryExpired = true;
                     updateBuyButtonState();
                     clearInterval(countdownTimer);
@@ -1101,6 +1131,47 @@ async function buyTicket() {
 // 載入我的彩券：API-only render（不再逐張打鏈）
 // ==========================================
 
+function buildTicketStatus(ticket) {
+    const claimed = Boolean(ticket.claimed);
+    const drawn = Boolean(ticket.drawn);
+    const winnersSet = Boolean(ticket.winnersSet);
+    const expired = Boolean(ticket.expired);
+    const isWinner = Boolean(ticket.isWinner);
+    const claimable = Boolean(ticket.claimable);
+    const matchCount = ticket.matchCount === null || ticket.matchCount === undefined ? null : Number(ticket.matchCount);
+    const isSpecialWinner = Boolean(ticket.isSpecialWinner);
+
+    if (claimed) {
+        return { badge: `<span class="badge bg-secondary fs-6">已提領</span>`, action: "" };
+    }
+
+    if (!drawn) {
+        return { badge: `<span class="badge bg-warning text-dark fs-6">未開獎</span>`, action: "" };
+    }
+
+    if (!winnersSet) {
+        return { badge: `<span class="badge bg-info text-dark fs-6">計算中</span>`, action: "" };
+    }
+
+    if (expired) {
+        return { badge: `<span class="badge bg-dark fs-6">已過期</span>`, action: "" };
+    }
+
+    if (isWinner) {
+        let detail = "";
+        if (matchCount !== null) detail += `對中 ${matchCount} 星`;
+        if (isSpecialWinner) detail += detail ? " + 特別獎" : "特別獎";
+        const hint = detail ? `<div class="small text-success mt-1">${detail}</div>` : "";
+        const action = claimable
+            ? `<div class="mt-2"><button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${ticket.id})">一鍵提領獎金</button></div>`
+            : "";
+        return { badge: `<span class="badge bg-success fs-6">恭喜中獎</span>${hint}`, action };
+    }
+
+    const detail = matchCount !== null ? `<div class="small text-muted mt-1">對中 ${matchCount} 星</div>` : "";
+    return { badge: `<span class="badge bg-danger fs-6">未中獎</span>${detail}`, action: "" };
+}
+
 async function loadMyTickets(force = false) {
     if (!userAddress) return;
 
@@ -1155,7 +1226,17 @@ async function loadMyTickets(force = false) {
                     ? ticket.numbers.map(Number)
                     : decodeMask(ethers.BigNumber.from(ticket.mask)),
                 txHash: ticket.txHash || null,
-                source: ticket.source || "api"
+                source: ticket.source || "api",
+                drawn: Boolean(ticket.drawn),
+                winnersSet: Boolean(ticket.winnersSet),
+                expired: Boolean(ticket.expired),
+                claimed: Boolean(ticket.claimed),
+                isWinner: Boolean(ticket.isWinner),
+                isSpecialWinner: Boolean(ticket.isSpecialWinner),
+                claimable: Boolean(ticket.claimable),
+                matchCount: ticket.matchCount === null || ticket.matchCount === undefined ? null : Number(ticket.matchCount),
+                prizeTier: ticket.prizeTier || "pending",
+                winningNumbers: Array.isArray(ticket.winningNumbers) ? ticket.winningNumbers.map(Number) : []
             }))
             .filter(ticket => Number.isInteger(ticket.id) && ticket.id >= 0)
             .filter(ticket => Number.isInteger(ticket.round) && ticket.round > 0)
@@ -1179,6 +1260,7 @@ async function loadMyTickets(force = false) {
             const txText = ticket.txHash
                 ? `<div class="small text-muted mt-1">Tx: ${ticket.txHash.slice(0, 10)}...${ticket.txHash.slice(-8)}</div>`
                 : "";
+            const status = buildTicketStatus(ticket);
 
             return `
                 <div class="card ticket-card p-3 shadow-sm bg-white mb-3">
@@ -1188,15 +1270,9 @@ async function loadMyTickets(force = false) {
                             <p class="ticket-number-text mb-0 fs-5 fw-bold text-dark">選號：${currentNumbers.join(", ")}</p>
                             ${txText}
                         </div>
-                        <div class="ticket-status-wrap">
-                            <span class="badge bg-info text-dark fs-6">已購票（領獎時由鏈上驗證）</span>
-                        </div>
+                        <div class="ticket-status-wrap">${status.badge}</div>
                     </div>
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-success fw-bold" onclick="claimReward(${id})">
-                            一鍵提領獎金（鏈上驗證）
-                        </button>
-                    </div>
+                    ${status.action}
                 </div>
             `;
         }).join("");
@@ -1234,7 +1310,8 @@ async function claimReward(ticketId) {
         const tx = await activeContract.claimBatch([ticketId]);
 
         alert("提領獎金交易已送出，正在等待區塊鏈確認...");
-        await tx.wait();
+        const receipt = await tx.wait();
+        await reportClaimedTicketsToApi([ticketId], receipt.transactionHash);
         alert("獎金提領成功！彩券已於區塊鏈標記為已領取。");
 
         resetTicketUiCacheState();
