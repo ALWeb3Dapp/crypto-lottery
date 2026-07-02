@@ -90,12 +90,12 @@
 
                 <div id="loadingTickets" class="text-center my-4 d-none">
                     <div class="spinner-border text-success" role="status"></div>
-                    <p class="mt-2 text-muted">正在從 API 讀取您的彩券...</p>
+                    <p class="mt-2 text-muted">正在讀取您的彩券...</p>
                 </div>
 
                 <div id="myTicketsList">
                     <div class="text-center py-5 text-muted">
-                        請先連結錢包，或您目前在 API 尚無此錢包彩券紀錄。
+                        請先連結錢包，或您目前尚無此錢包彩券紀錄。
                     </div>
                 </div>
             </div>
@@ -237,7 +237,7 @@ function validateContractAddress() {
     console.log("isAddress =", ok);
 
     if (!ok) {
-        alert("Lottery 合約地址格式錯誤，請確認 LOTTERY_CONTRACT_ADDRESS 是完整 0x 開頭地址。");
+        alert("Lottery 合約地址格式錯誤，請確認 。");
         throw new Error("Invalid LOTTERY_CONTRACT_ADDRESS");
     }
 }
@@ -788,8 +788,8 @@ function injectReloadTicketsButton() {
     const wrapper = document.createElement("div");
     wrapper.className = "mb-3 text-end";
     wrapper.innerHTML = `
-        <button id="reloadTicketsBtn" class="btn btn-outline-primary btn-sm fw-bold" onclick="forceReloadTicketsFromApi()">從 API 讀取彩券</button>
-        <div id="reloadTicketsHint" class="form-text text-muted mt-1">購票成功後會自動寫入 API；若畫面未更新，請按此從 API 重新讀取。</div>
+        <button id="reloadTicketsBtn" class="btn btn-outline-primary btn-sm fw-bold" onclick="forceReloadTicketsFromApi()"> 讀取彩券</button>
+        <div id="reloadTicketsHint" class="form-text text-muted mt-1">購票成功後會自動寫入；若畫面未更新，請按此重新讀取。</div>
     `;
 
     myTicketsList.parentNode.insertBefore(wrapper, myTicketsList);
@@ -801,13 +801,13 @@ function updateReloadTicketButtonText() {
     if (!btn) return;
 
     if (!userAddress) {
-        btn.innerText = "從 API 讀取彩券";
-        if (hint) hint.innerText = "請先連結錢包，再從 API 讀取彩券。";
+        btn.innerText = "讀取彩券";
+        if (hint) hint.innerText = "請先連結錢包，再讀取彩券。";
         return;
     }
 
-    btn.innerText = "從 API 讀取彩券";
-    if (hint) hint.innerText = "購票成功後會自動寫入 API；若畫面未更新，請按此從 API 重新讀取。";
+    btn.innerText = "讀取彩券";
+    if (hint) hint.innerText = "購票成功後會自動寫入；若畫面未更新，請按此重新讀取。";
 }
 
 async function forceReloadTicketsFromApi() {
@@ -821,14 +821,14 @@ async function forceReloadTicketsFromApi() {
     try {
         if (btn) {
             btn.disabled = true;
-            btn.innerText = "正在從 API 讀取彩券...";
+            btn.innerText = "正在從伺服器讀取彩券...";
         }
 
         resetTicketUiCacheState();
         await loadMyTickets(true);
     } catch (error) {
         console.error("從 API 讀取彩券失敗:", error);
-        alert("從 API 讀取彩券失敗，請稍後再試。" + (error?.message ? `\n${error.message}` : ""));
+        alert("伺服器讀取彩券失敗，請稍後再試。" + (error?.message ? `\n${error.message}` : ""));
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -848,7 +848,7 @@ async function fetchTicketsFromApiForWallet() {
     const data = await res.json().catch(() => null);
 
     if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || `API 讀票失敗 HTTP ${res.status}`);
+        throw new Error(data?.error || `讀票失敗 HTTP ${res.status}`);
     }
 
     return Array.isArray(data.tickets) ? data.tickets : [];
@@ -1009,7 +1009,7 @@ async function updateLotteryPoolData() {
                 const distance = activeCountdownEndTime - Math.floor(Date.now() / 1000);
 
                 if (distance <= 0) {
-                    document.getElementById("countdownDisplay").innerText = "本期已到期，等待 VRF 開獎與計算中！";
+                    document.getElementById("countdownDisplay").innerText = "本期已到期，等待開獎與計算中！";
                     isLotteryExpired = true;
                     updateBuyButtonState();
                     clearInterval(countdownTimer);
@@ -1208,8 +1208,8 @@ async function loadMyTickets(force = false) {
         if (!apiTickets.length) {
             container.innerHTML = `
                 <div class="text-center py-5 text-muted">
-                    API 目前尚未收錄此錢包的彩券。<br>
-                    請先使用官方前端購票；購票成功後系統會自動寫入 API。
+                    伺服器目前尚未收錄此錢包的彩券。<br>
+                    請先使用官方前端購票；購票成功後系統會自動寫入伺服器。
                 </div>
             `;
             ticketsLoadedOnce = true;
@@ -1245,7 +1245,7 @@ async function loadMyTickets(force = false) {
         if (validTickets.length === 0) {
             container.innerHTML = `
                 <div class="text-center py-5 text-muted">
-                    API 有資料，但沒有可顯示的有效彩券。
+                    伺服器有資料，但沒有可顯示的有效彩券。
                 </div>
             `;
             ticketsLoadedOnce = true;
@@ -1282,11 +1282,11 @@ async function loadMyTickets(force = false) {
         ticketsLoadedOnce = true;
         lastRenderedTicketSig = getTicketIdsSignature(validTickets.map(ticket => ticket.id));
     } catch (error) {
-        console.error("API 讀取彩券資料失敗：", error);
+        console.error("讀取彩券資料失敗：", error);
         const msg = error?.error?.message || error?.data?.message || error?.reason || error?.message || String(error);
 
         if (renderSeq === ticketsRenderSeq) {
-            container.innerHTML = `<div class="text-center py-5 text-danger">API 讀取彩券資料失敗：${msg}</div>`;
+            container.innerHTML = `<div class="text-center py-5 text-danger">讀取彩券資料失敗：${msg}</div>`;
         }
     } finally {
         if (renderSeq === ticketsRenderSeq) loader.classList.add("d-none");
